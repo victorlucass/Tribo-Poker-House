@@ -60,7 +60,7 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc } from '@/firebase';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from './ui/skeleton';
 
@@ -189,10 +189,24 @@ const CashGameManager: React.FC = () => {
   const gameRef = useMemo(() => (firestore ? doc(firestore, 'cash-games', GAME_ID) : null), [firestore]);
   const { data: game, status, error } = useDoc<CashGame>(gameRef);
 
+  const createGame = useCallback(() => {
+    if (gameRef) {
+      setDoc(gameRef, {
+          id: GAME_ID,
+          chips: initialChips,
+          players: [],
+          cashedOutPlayers: [],
+          positionsSet: false,
+          dealerId: null,
+          createdAt: new Date().toISOString(),
+      });
+    }
+  }, [gameRef]);
+
   const updateGame = useCallback(
     (data: Partial<CashGame>) => {
       if (gameRef) {
-        setDoc(gameRef, data, { merge: true });
+        updateDoc(gameRef, data);
       }
     },
     [gameRef]
@@ -202,7 +216,6 @@ const CashGameManager: React.FC = () => {
   const players = game?.players ?? [];
   const cashedOutPlayers = game?.cashedOutPlayers ?? [];
   const positionsSet = game?.positionsSet ?? false;
-  const dealerId = game?.dealerId ?? null;
   
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerBuyIn, setNewPlayerBuyIn] = useState('');
@@ -239,7 +252,9 @@ const CashGameManager: React.FC = () => {
       return;
     }
     const { playersWithDealtCards, sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
+    // This state is just for the animation component
     setPlayersWithCards(playersWithDealtCards);
+    // This is what is saved to the DB
     updateGame({
       players: sortedPlayers,
       dealerId: dealer.id,
@@ -251,7 +266,8 @@ const CashGameManager: React.FC = () => {
   const onDealingComplete = () => {
     setIsDealing(false);
     updateGame({ positionsSet: true });
-    toast({ title: 'Posições Definidas!', description: `O dealer é ${players.find((p) => p.id === dealerId)?.name}.` });
+    const dealer = players.find((p) => p.id === game?.dealerId)
+    toast({ title: 'Posições Definidas!', description: `O dealer é ${dealer?.name}.` });
   };
   
   const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy') => {
@@ -665,15 +681,7 @@ const CashGameManager: React.FC = () => {
 
   if (status === 'success' && !game) {
       // First time load, create the game document
-      updateGame({
-          id: GAME_ID,
-          chips: initialChips,
-          players: [],
-          cashedOutPlayers: [],
-          positionsSet: false,
-          dealerId: null,
-          createdAt: new Date().toISOString(),
-      });
+      createGame();
       return null; // Will re-render once the game is created
   }
 
@@ -731,7 +739,7 @@ const CashGameManager: React.FC = () => {
                   <CardTitle>Mesa de Jogo</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <PokerTable players={players} dealerId={dealerId} />
+                  <PokerTable players={players} dealerId={game?.dealerId ?? null} />
                 </CardContent>
               </Card>
             )}
@@ -1569,3 +1577,5 @@ const CashGameManager: React.FC = () => {
 };
 
 export default CashGameManager;
+
+    
