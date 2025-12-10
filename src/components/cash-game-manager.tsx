@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Card,
@@ -223,98 +223,123 @@ const CashGameManager: React.FC = () => {
   const [playerToCashOut, setPlayerToCashOut] = useState<Player | null>(null);
   const [cashOutChipCounts, setCashOutChipCounts] = useState<Map<number, number>>(new Map());
 
+  // Editable distribution state
+  const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  const [transactionDetails, setTransactionDetails] = useState<{
+    type: 'buy-in' | 'rebuy';
+    amount: number;
+    playerId?: number;
+    playerName?: string;
+  } | null>(null);
+  const [manualChipCounts, setManualChipCounts] = useState<Map<number, number>>(new Map());
+
   const sortedChips = useMemo(() => [...chips].sort((a, b) => a.value - b.value), [chips]);
 
-  const handleAddPlayer = useCallback(() => {
-    if (!newPlayerName || !newPlayerBuyIn) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro',
-        description: 'Por favor, preencha o nome e o valor de buy-in do jogador.',
-      });
-      return;
-    }
-    const buyInValue = parseFloat(newPlayerBuyIn);
-    if (isNaN(buyInValue) || buyInValue <= 0) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro de Buy-in',
-        description: 'O valor do buy-in deve ser um número positivo.',
-      });
-      return;
-    }
+  const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy') => {
+    let amount: number;
+    let details: { type: 'buy-in' | 'rebuy'; amount: number; playerId?: number; playerName?: string; };
 
-    const chipDistribution = distributeChips(buyInValue, chips);
-
-    if (chipDistribution.length === 0) {
-        toast({
-            variant: "destructive",
-            title: "Erro na distribuição",
-            description: `Não foi possível distribuir R$${buyInValue.toFixed(2)} com as fichas atuais. Tente um valor diferente ou ajuste as fichas.`
-        })
+    if (type === 'buy-in') {
+      if (!newPlayerName || !newPlayerBuyIn) {
+        toast({ variant: 'destructive', title: 'Erro', description: 'Preencha o nome e o valor de buy-in.' });
         return;
-    }
-
-    const newPlayer: Player = {
-      id: players.length > 0 ? Math.max(...players.map(p => p.id), ...cashedOutPlayers.map(p => p.id)) + 1 : 1,
-      name: newPlayerName,
-      transactions: [{
-          id: 1,
-          type: 'buy-in',
-          amount: buyInValue,
-          chips: chipDistribution,
-      }],
-    };
-    
-    toast({
-        title: 'Jogador Adicionado!',
-        description: `${newPlayer.name} entrou na mesa com R$${buyInValue.toFixed(2)}.`,
-    });
-
-    setPlayers(prevPlayers => [...prevPlayers, newPlayer]);
-    setNewPlayerName('');
-    setNewPlayerBuyIn('');
-  }, [newPlayerName, newPlayerBuyIn, chips, players, cashedOutPlayers, toast]);
-
-  const handleRebuyOrAddon = useCallback(() => {
-    if (!playerForDetails || !rebuyAmount) {
+      }
+      amount = parseFloat(newPlayerBuyIn);
+      details = { type: 'buy-in', amount, playerName: newPlayerName };
+    } else { // rebuy
+      if (!playerForDetails || !rebuyAmount) {
         toast({ variant: 'destructive', title: 'Erro', description: 'Selecione um jogador e insira um valor.' });
         return;
-    }
-    const amount = parseFloat(rebuyAmount);
-    if(isNaN(amount) || amount <= 0) {
-        toast({ variant: 'destructive', title: 'Valor Inválido', description: 'O valor deve ser um número positivo.' });
-        return;
-    }
-    
-    const newChipsDistribution = distributeChips(amount, chips);
-    if(newChipsDistribution.length === 0) {
-        toast({ variant: 'destructive', title: 'Erro na Distribuição', description: `Não foi possível distribuir R$${amount.toFixed(2)}.` });
-        return;
-    }
-    
-    const newTransaction: PlayerTransaction = {
-        id: (playerForDetails.transactions.length > 0 ? Math.max(...playerForDetails.transactions.map(t => t.id)) : 0) + 1,
-        type: 'rebuy',
-        amount,
-        chips: newChipsDistribution,
+      }
+      amount = parseFloat(rebuyAmount);
+      details = { type: 'rebuy', amount, playerId: playerForDetails.id, playerName: playerForDetails.name };
     }
 
-    setPlayers(prevPlayers => prevPlayers.map(p => {
-        if(p.id === playerForDetails.id) {
-            return {
-                ...p,
-                transactions: [...p.transactions, newTransaction],
-            };
-        }
-        return p;
+    if (isNaN(amount) || amount <= 0) {
+      toast({ variant: 'destructive', title: 'Valor Inválido', description: 'O valor deve ser um número positivo.' });
+      return;
+    }
+
+    const suggestedDistribution = distributeChips(amount, chips);
+    if (suggestedDistribution.length === 0) {
+      toast({ variant: 'destructive', title: 'Erro na Distribuição', description: `Não foi possível distribuir R$${amount.toFixed(2)}.` });
+      return;
+    }
+    
+    const chipMap = new Map<number, number>();
+    suggestedDistribution.forEach(c => chipMap.set(c.chipId, c.count));
+
+    setManualChipCounts(chipMap);
+    setTransactionDetails(details);
+    setIsDistributionModalOpen(true);
+  };
+  
+  const handleChipCountChange = (chipId: number, countStr: string) => {
+    const count = parseInt(countStr) || 0;
+    setManualChipCounts(prev => new Map(prev).set(chipId, count));
+  }
+
+  const distributedValue = useMemo(() => {
+    return Array.from(manualChipCounts.entries()).reduce((acc, [chipId, count]) => {
+        const chip = sortedChips.find(c => c.id === chipId);
+        return acc + (chip ? chip.value * count : 0);
+    }, 0);
+  }, [manualChipCounts, sortedChips]);
+
+
+  const confirmTransaction = () => {
+    if (!transactionDetails) return;
+
+    const { type, amount, playerId, playerName } = transactionDetails;
+
+    const chipDistribution = sortedChips.map(chip => ({
+      chipId: chip.id,
+      count: manualChipCounts.get(chip.id) || 0,
     }));
     
-    setPlayerForDetails(prev => prev ? { ...prev, transactions: [...prev.transactions, newTransaction] } : null);
+    if (Math.abs(distributedValue - amount) > 0.01) {
+        toast({ variant: 'destructive', title: 'Valores não batem', description: 'O valor distribuído nas fichas não corresponde ao valor da transação.'});
+        return;
+    }
 
-    toast({ title: 'Transação Concluída!', description: `R$${amount.toFixed(2)} adicionado para ${playerForDetails.name}.` });
-    setRebuyAmount('');
-  }, [playerForDetails, rebuyAmount, chips, toast]);
+    if (type === 'buy-in') {
+      const newPlayer: Player = {
+        id: players.length > 0 ? Math.max(...players.map(p => p.id), ...cashedOutPlayers.map(p => p.id)) + 1 : 1,
+        name: playerName!,
+        transactions: [{
+            id: 1,
+            type: 'buy-in',
+            amount: amount,
+            chips: chipDistribution,
+        }],
+      };
+      setPlayers(prevPlayers => [...prevPlayers, newPlayer]);
+      toast({ title: 'Jogador Adicionado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
+      setNewPlayerName('');
+      setNewPlayerBuyIn('');
+    } else { // rebuy
+      const newTransaction: PlayerTransaction = {
+          id: (playerForDetails!.transactions.length > 0 ? Math.max(...playerForDetails!.transactions.map(t => t.id)) : 0) + 1,
+          type: 'rebuy',
+          amount,
+          chips: chipDistribution,
+      }
+  
+      setPlayers(prevPlayers => prevPlayers.map(p => {
+          if(p.id === playerId) {
+              return { ...p, transactions: [...p.transactions, newTransaction] };
+          }
+          return p;
+      }));
+      setPlayerForDetails(prev => prev ? { ...prev, transactions: [...prev.transactions, newTransaction] } : null);
+      toast({ title: 'Transação Concluída!', description: `R$${amount.toFixed(2)} adicionado para ${playerName}.` });
+      setRebuyAmount('');
+    }
+
+    setIsDistributionModalOpen(false);
+    setTransactionDetails(null);
+  };
+
 
   const removePlayer = (id: number) => {
     setPlayers(players.filter(p => p.id !== id));
@@ -558,7 +583,7 @@ const CashGameManager: React.FC = () => {
                     value={newPlayerBuyIn}
                     onChange={(e) => setNewPlayerBuyIn(e.target.value)}
                   />
-                  <Button onClick={handleAddPlayer} className="w-full md:w-auto">
+                  <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto">
                     <PlusCircle className="mr-2" />
                     Adicionar
                   </Button>
@@ -748,7 +773,7 @@ const CashGameManager: React.FC = () => {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button onClick={handleRebuyOrAddon}>Confirmar Adição</Button>
+                      <Button onClick={() => handleOpenDistributionModal('rebuy')}>Confirmar Adição</Button>
                     </DialogFooter>
                   </>
                 )}
@@ -1112,6 +1137,50 @@ const CashGameManager: React.FC = () => {
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsCashOutOpen(false)}>Cancelar</Button>
                     <Button onClick={confirmCashOut}>Confirmar Cash Out</Button>
+                </DialogFooter>
+            </DialogContent>
+       </Dialog>
+       
+       <Dialog open={isDistributionModalOpen} onOpenChange={setIsDistributionModalOpen}>
+            <DialogContent className="max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Confirmar Distribuição de Fichas</DialogTitle>
+                     <DialogDescription>
+                       Para {transactionDetails?.playerName} - Valor da Transação: {transactionDetails?.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                     {sortedChips.map(chip => (
+                        <div key={chip.id} className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor={`dist-chip-${chip.id}`} className="text-right flex items-center justify-end gap-2">
+                                <ChipIcon color={chip.color}/>
+                                Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </Label>
+                            <Input
+                                id={`dist-chip-${chip.id}`}
+                                type="number"
+                                className="col-span-2"
+                                min="0"
+                                placeholder="Quantidade"
+                                value={manualChipCounts.get(chip.id) || ''}
+                                onChange={e => handleChipCountChange(chip.id, e.target.value)}
+                            />
+                        </div>
+                     ))}
+                     <Separator />
+                     <div className="flex justify-between items-center text-lg font-bold">
+                        <Label>Valor Distribuído:</Label>
+                        <span className={cn(
+                            "font-mono",
+                             Math.abs(distributedValue - (transactionDetails?.amount || 0)) > 0.01 ? 'text-destructive' : 'text-primary'
+                        )}>
+                            {distributedValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                     </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsDistributionModalOpen(false)}>Cancelar</Button>
+                    <Button onClick={confirmTransaction} disabled={Math.abs(distributedValue - (transactionDetails?.amount || 0)) > 0.01}>Confirmar</Button>
                 </DialogFooter>
             </DialogContent>
        </Dialog>
