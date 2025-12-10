@@ -49,7 +49,6 @@ const CardBack: React.FC = () => (
 
 
 const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComplete }) => {
-    const [revealedPlayers, setRevealedPlayers] = useState<Player[]>([]);
     const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
 
     useEffect(() => {
@@ -61,30 +60,29 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
                     const nextIndex = prevIndex + 1;
                     if (nextIndex > players.length) {
                         clearInterval(interval);
-                         // All animations are done
-                        const completeTimeout = setTimeout(onComplete, 2000); // Wait for 2s before calling onComplete
+                        const completeTimeout = setTimeout(onComplete, 2000);
                         return prevIndex;
                     }
-                     setRevealedPlayers(prev => [...prev, players[prevIndex]]);
                     return nextIndex;
                 });
             }, 1500); // Time between each player reveal
 
-            return () => clearInterval(interval);
-        }, 1000); // Initial delay before starting the reveal
+            return () => {
+                clearInterval(interval);
+            }
+        }, 500); // Initial delay
 
         return () => clearTimeout(revealTimer);
 
     }, [players, onComplete]);
   
-    const sortedPlayersByCard = [...players].sort((a,b) => b.seat! - a.seat!);
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center overflow-hidden">
             <div className="w-full max-w-sm h-full flex flex-col items-center justify-center">
                 {players.map((player, index) => {
-                    const isRevealed = revealedPlayers.some(p => p.id === player.id);
-                    const isActive = revealedPlayers.length === index;
+                    const isActive = currentPlayerIndex === index + 1;
+                    const wasActive = currentPlayerIndex > index + 1;
 
                     return (
                         <div
@@ -92,7 +90,7 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
                             className={cn(
                                 "absolute transition-all duration-500 ease-in-out",
                                 isActive ? 'opacity-100 transform scale-100' : 'opacity-0 transform scale-90',
-                                isRevealed && !isActive ? 'opacity-0 transform -translate-y-20' : ''
+                                wasActive ? 'opacity-0 transform -translate-y-20' : ''
                             )}
                             style={{ zIndex: players.length - index }}
                         >
