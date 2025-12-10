@@ -52,6 +52,7 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
   useEffect(() => {
     let dealInterval: NodeJS.Timeout;
     let flipInterval: NodeJS.Timeout;
+    let completeTimeout: NodeJS.Timeout;
 
     const dealTimer = setTimeout(() => {
       let index = 0;
@@ -65,10 +66,9 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
                   if (flipIndex >= players.length) {
                       clearInterval(flipInterval);
                       // All animations are done
-                      setTimeout(onComplete, 2000);
+                      completeTimeout = setTimeout(onComplete, 2000); // Wait for 2s before calling onComplete
                       return;
                   }
-                  // This check is important, player might be undefined
                   const playerToFlip = players[flipIndex];
                   if (playerToFlip) {
                     setFlippingCards(prev => [...prev, playerToFlip.id]);
@@ -91,14 +91,16 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
     return () => {
         clearTimeout(dealTimer);
         clearInterval(dealInterval);
-        clearInterval(flipInterval);
+        if (flipInterval) clearInterval(flipInterval);
+        if (completeTimeout) clearTimeout(completeTimeout);
     };
   }, [players, onComplete]);
   
   const getSeatPosition = (index: number, totalPlayers: number) => {
-    const angle = (index / totalPlayers) * 2 * Math.PI;
+    // Starts from top and goes clockwise
+    const angle = -Math.PI / 2 + (index / totalPlayers) * 2 * Math.PI;
     const radiusX = 45; // percentage
-    const radiusY = 30; // percentage
+    const radiusY = 35; // percentage
     const x = 50 + radiusX * Math.cos(angle);
     const y = 50 + radiusY * Math.sin(angle);
     return { left: `${x}%`, top: `${y}%` };
@@ -136,9 +138,13 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
                  animationTimingFunction: 'ease-out'
               }}
             >
-                <div className={cn("relative w-full h-full transform-style-3d", {"": isFlipping})}>
-                    <CardBack isFlipping={isFlipping} />
-                    {player.card && <CardFace rank={player.card.rank} suit={player.card.suit} isFlipping={isFlipping} />}
+                <div className={cn("relative w-full h-full transform-style-3d", {"animate-flip-y": isFlipping})}>
+                    <div className="absolute w-full h-full backface-hidden transform rotate-y-180">
+                      {player.card && <CardFace rank={player.card.rank} suit={player.card.suit} isFlipping={isFlipping} />}
+                    </div>
+                    <div className="absolute w-full h-full backface-hidden">
+                      <CardBack isFlipping={isFlipping} />
+                    </div>
                 </div>
             </div>
           );
@@ -149,3 +155,4 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
 };
 
 export default CardDealAnimation;
+

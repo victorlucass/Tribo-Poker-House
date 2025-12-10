@@ -620,6 +620,17 @@ const CashGameManager: React.FC = () => {
                  </CardContent>
                </Card>
             )}
+
+            {positionsSet && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Mesa de Jogo</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <PokerTable players={players} dealerId={dealerId} />
+                    </CardContent>
+                </Card>
+            )}
             
             <Dialog onOpenChange={(isOpen) => { if(!isOpen) {setPlayerForDetails(null); setRebuyAmount('')} }}>
               <Card>
@@ -636,9 +647,6 @@ const CashGameManager: React.FC = () => {
                   )}
                 </CardHeader>
                 <CardContent>
-                 {positionsSet ? (
-                   <PokerTable players={players} dealerId={dealerId} />
-                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -717,7 +725,7 @@ const CashGameManager: React.FC = () => {
                           })
                         )}
                       </TableBody>
-                      {players.length > 0 && !positionsSet && (
+                      {players.length > 0 && (
                         <UiTableFooter>
                            <TableRow className="bg-muted/50 hover:bg-muted font-bold">
                             <TableCell colSpan={2} className="text-right">
@@ -747,7 +755,6 @@ const CashGameManager: React.FC = () => {
                       )}
                     </Table>
                   </div>
-                 )}
                 </CardContent>
               </Card>
 

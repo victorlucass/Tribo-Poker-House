@@ -93,17 +93,49 @@ to: {
             '100%': { transform: 'var(--transform-end)', opacity: '1' },
         },
         'flip-card': {
-            '0%': { transform: 'rotateY(180deg)' },
-            '100%': { transform: 'rotateY(0deg)' },
+            '0%': { transform: 'rotateY(0deg)' },
+            '100%': { transform: 'rotateY(180deg)' },
         },
+         'flip-y': {
+            '0%': { transform: 'rotateY(0deg)' },
+            '100%': { transform: 'rotateY(180deg)' },
+        }
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'deal-card': 'deal-card 0.5s ease-out forwards',
         'flip-card': 'flip-card 0.5s ease-in-out forwards',
+        'flip-y': 'flip-y 0.6s ease-in-out forwards',
+      },
+      backfaceVisibility: {
+        hidden: 'hidden',
+      },
+      transformStyle: {
+        '3d': 'preserve-3d',
+      },
+       perspective: {
+        '1000': '1000px',
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [
+    require('tailwindcss-animate'),
+    function ({ addUtilities }: { addUtilities: any}) {
+        addUtilities({
+            '.backface-hidden': {
+                'backface-visibility': 'hidden',
+            },
+            '.transform-style-3d': {
+                'transform-style': 'preserve-3d',
+            },
+            '.perspective-1000': {
+                'perspective': '1000px',
+            },
+             '.rotate-y-180': {
+                'transform': 'rotateY(180deg)',
+            },
+        })
+    }
+  ],
 } satisfies Config;

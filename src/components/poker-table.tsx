@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import type { CashGamePlayer as Player } from '@/lib/types';
+import type { CashGamePlayer as Player, Suit, Rank } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { User } from 'lucide-react';
 
@@ -10,13 +10,27 @@ interface PokerTableProps {
   dealerId: number | null;
 }
 
-const MAX_PLAYERS = 10;
+const suitSymbols: Record<Suit, string> = {
+  spades: '♠',
+  hearts: '♥',
+  diamonds: '♦',
+  clubs: '♣',
+};
+
+const suitColors: Record<Suit, string> = {
+  spades: 'text-foreground',
+  hearts: 'text-red-500',
+  diamonds: 'text-blue-500',
+  clubs: 'text-green-500',
+};
+
 
 const PokerTable: React.FC<PokerTableProps> = ({ players, dealerId }) => {
   const getSeatPosition = (index: number, totalPlayers: number) => {
-    const angle = (index / totalPlayers) * 2 * Math.PI;
+    // Starts from top and goes clockwise
+    const angle = -Math.PI / 2 + (index / totalPlayers) * 2 * Math.PI;
     const radiusX = 45; // percentage
-    const radiusY = 30; // percentage
+    const radiusY = 35; // percentage
     const x = 50 + radiusX * Math.cos(angle);
     const y = 50 + radiusY * Math.sin(angle);
     return { left: `${x}%`, top: `${y}%` };
@@ -28,8 +42,8 @@ const PokerTable: React.FC<PokerTableProps> = ({ players, dealerId }) => {
     <div className="relative w-full aspect-[2/1] max-w-4xl mx-auto my-8">
       {/* Table Surface */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-full h-full bg-green-800 rounded-[50%] border-8 border-yellow-800 shadow-2xl">
-           <div className="w-full h-full rounded-[50%] border-4 border-yellow-900 opacity-50"/>
+        <div className="w-full h-[80%] bg-green-800 rounded-[50px] border-8 border-yellow-800 shadow-2xl">
+           <div className="w-full h-full rounded-[50px] border-4 border-yellow-900 opacity-50"/>
         </div>
       </div>
 
@@ -40,22 +54,27 @@ const PokerTable: React.FC<PokerTableProps> = ({ players, dealerId }) => {
         return (
           <div
             key={player.id}
-            className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center"
+            className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1"
             style={{ left, top }}
           >
             <div
               className={cn(
-                "w-16 h-16 rounded-full bg-card border-2 border-primary/50 flex flex-col items-center justify-center p-1 text-center shadow-lg",
+                "w-20 h-20 rounded-full bg-card border-2 border-primary/50 flex flex-col items-center justify-center p-1 text-center shadow-lg",
                 isDealer && "border-accent ring-2 ring-accent"
               )}
             >
               <User className="h-5 w-5 text-primary" />
-              <span className="text-xs font-bold truncate text-foreground">
+              <span className="text-xs font-bold w-16 truncate text-foreground">
                 {player.name}
               </span>
+               {player.card && (
+                  <div className={cn("text-xs font-bold", suitColors[player.card.suit])}>
+                      {player.card.rank}{suitSymbols[player.card.suit]}
+                  </div>
+              )}
             </div>
             {isDealer && (
-                <div className="absolute -bottom-5 w-6 h-6 bg-accent text-accent-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background">
+                <div className="absolute -bottom-3 w-6 h-6 bg-accent text-accent-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
                     D
                 </div>
             )}
