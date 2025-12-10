@@ -23,136 +23,98 @@ const suitColors: Record<Suit, string> = {
   clubs: 'text-green-500',
 };
 
-const CardFace: React.FC<{ rank: Rank, suit: Suit, isFlipping: boolean }> = ({ rank, suit, isFlipping }) => (
-    <div className={cn("absolute w-full h-full backface-hidden flex flex-col justify-between p-1 rounded-lg bg-white border border-gray-300", { 'animate-flip-card': isFlipping })}>
+const CardFace: React.FC<{ rank: Rank, suit: Suit }> = ({ rank, suit }) => (
+    <div className={cn("absolute w-full h-full backface-hidden flex flex-col justify-between p-2 rounded-lg bg-white border-2 border-gray-300")}>
         <div className="flex flex-col items-start">
-            <span className={cn("font-bold text-lg leading-none", suitColors[suit])}>{rank}</span>
-            <span className={cn("text-xs leading-none", suitColors[suit])}>{suitSymbols[suit]}</span>
+            <span className={cn("font-bold text-2xl leading-none", suitColors[suit])}>{rank}</span>
+            <span className={cn("text-xl leading-none", suitColors[suit])}>{suitSymbols[suit]}</span>
         </div>
-        <div className="flex flex-col items-end">
-            <span className={cn("font-bold text-lg leading-none rotate-180", suitColors[suit])}>{rank}</span>
-            <span className={cn("text-xs leading-none rotate-180", suitColors[suit])}>{suitSymbols[suit]}</span>
+        <div className="flex items-center justify-center">
+            <span className={cn("text-5xl", suitColors[suit])}>{suitSymbols[suit]}</span>
+        </div>
+        <div className="flex flex-col items-end rotate-180">
+            <span className={cn("font-bold text-2xl leading-none", suitColors[suit])}>{rank}</span>
+            <span className={cn("text-xl leading-none", suitColors[suit])}>{suitSymbols[suit]}</span>
         </div>
     </div>
 );
 
-const CardBack: React.FC<{ isFlipping: boolean }> = ({ isFlipping }) => (
-    <div className={cn("absolute w-full h-full backface-hidden bg-primary rounded-lg border border-red-800 flex items-center justify-center", { 'animate-flip-card': isFlipping })}>
+const CardBack: React.FC = () => (
+    <div className={cn("absolute w-full h-full backface-hidden bg-primary rounded-lg border-2 border-red-800 flex items-center justify-center")}>
         <div className="w-4/5 h-4/5 rounded-md border-2 border-red-300/50 flex items-center justify-center">
-             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground opacity-50"><path d="m12 2 10 10-10 10-10-10Z"/></svg>
+             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground opacity-50"><path d="m12 2 10 10-10 10-10-10Z"/></svg>
         </div>
     </div>
 );
 
 
 const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComplete }) => {
-  const [dealtCards, setDealtCards] = useState<number[]>([]);
-  const [flippingCards, setFlippingCards] = useState<number[]>([]);
+    const [revealedPlayers, setRevealedPlayers] = useState<Player[]>([]);
+    const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
 
-  useEffect(() => {
-    let dealInterval: NodeJS.Timeout;
-    let flipInterval: NodeJS.Timeout;
-    let completeTimeout: NodeJS.Timeout;
+    useEffect(() => {
+        if (players.length === 0) return;
 
-    const dealTimer = setTimeout(() => {
-      let index = 0;
-      dealInterval = setInterval(() => {
-        if (index >= players.length) {
-            clearInterval(dealInterval);
-            // Start flipping after all cards are dealt
-            const flipTimer = setTimeout(() => {
-               let flipIndex = 0;
-               flipInterval = setInterval(() => {
-                  if (flipIndex >= players.length) {
-                      clearInterval(flipInterval);
-                      // All animations are done
-                      completeTimeout = setTimeout(onComplete, 2000); // Wait for 2s before calling onComplete
-                      return;
-                  }
-                  const playerToFlip = players[flipIndex];
-                  if (playerToFlip) {
-                    setFlippingCards(prev => [...prev, playerToFlip.id]);
-                  }
-                  flipIndex++;
-               }, 200);
-            }, 500); // Wait half a second after dealing
-            return;
-        }
-        
-        const playerToDeal = players[index];
-        if (playerToDeal) {
-          setDealtCards(prev => [...prev, playerToDeal.id]);
-        }
-        index++;
+        const revealTimer = setTimeout(() => {
+            const interval = setInterval(() => {
+                setCurrentPlayerIndex(prevIndex => {
+                    const nextIndex = prevIndex + 1;
+                    if (nextIndex > players.length) {
+                        clearInterval(interval);
+                         // All animations are done
+                        const completeTimeout = setTimeout(onComplete, 2000); // Wait for 2s before calling onComplete
+                        return prevIndex;
+                    }
+                     setRevealedPlayers(prev => [...prev, players[prevIndex]]);
+                    return nextIndex;
+                });
+            }, 1500); // Time between each player reveal
 
-      }, 300); // Stagger deal animation
-    }, 500); // Initial delay
+            return () => clearInterval(interval);
+        }, 1000); // Initial delay before starting the reveal
 
-    return () => {
-        clearTimeout(dealTimer);
-        clearInterval(dealInterval);
-        if (flipInterval) clearInterval(flipInterval);
-        if (completeTimeout) clearTimeout(completeTimeout);
-    };
-  }, [players, onComplete]);
+        return () => clearTimeout(revealTimer);
+
+    }, [players, onComplete]);
   
-  const getSeatPosition = (index: number, totalPlayers: number) => {
-    // Starts from top and goes clockwise
-    const angle = -Math.PI / 2 + (index / totalPlayers) * 2 * Math.PI;
-    const radiusX = 45; // percentage
-    const radiusY = 35; // percentage
-    const x = 50 + radiusX * Math.cos(angle);
-    const y = 50 + radiusY * Math.sin(angle);
-    return { left: `${x}%`, top: `${y}%` };
-  };
+    const sortedPlayersByCard = [...players].sort((a,b) => b.seat! - a.seat!);
 
-  const sortedPlayers = [...players].sort((a, b) => a.seat! - b.seat!);
+    return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center overflow-hidden">
+            <div className="w-full max-w-sm h-full flex flex-col items-center justify-center">
+                {players.map((player, index) => {
+                    const isRevealed = revealedPlayers.some(p => p.id === player.id);
+                    const isActive = revealedPlayers.length === index;
 
-  return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
-      <div className="relative w-full max-w-4xl aspect-[2/1]">
-        {/* Deck */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="w-16 h-24 bg-primary rounded-lg border-2 border-red-300/50 shadow-2xl flex items-center justify-center">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-foreground opacity-50"><path d="m12 2 10 10-10 10-10-10Z"/></svg>
+                    return (
+                        <div
+                            key={player.id}
+                            className={cn(
+                                "absolute transition-all duration-500 ease-in-out",
+                                isActive ? 'opacity-100 transform scale-100' : 'opacity-0 transform scale-90',
+                                isRevealed && !isActive ? 'opacity-0 transform -translate-y-20' : ''
+                            )}
+                            style={{ zIndex: players.length - index }}
+                        >
+                            <div className={cn("relative w-48 h-64 perspective-1000")}>
+                               <div className={cn("relative w-full h-full transform-style-3d", {"animate-flip-y": isActive})}>
+                                    <div className="absolute w-full h-full backface-hidden transform rotate-y-180">
+                                      {player.card && <CardFace rank={player.card.rank} suit={player.card.suit} />}
+                                    </div>
+                                    <div className="absolute w-full h-full backface-hidden">
+                                      <CardBack />
+                                    </div>
+                                </div>
+                            </div>
+                             <div className={cn("mt-4 text-center text-white text-2xl font-bold transition-opacity duration-500 delay-500", isActive ? 'opacity-100' : 'opacity-0')}>
+                                {player.name}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
-        
-        {sortedPlayers.map((player, index) => {
-          if (!dealtCards.includes(player.id)) return null;
-
-          const { left, top } = getSeatPosition(index, sortedPlayers.length);
-          const isFlipping = flippingCards.includes(player.id);
-          
-          const endTransform = `translate(calc(${left} - 50%), calc(${top} - 50%))`;
-
-          return (
-            <div
-              key={player.id}
-              className="absolute top-1/2 left-1/2 w-16 h-24 perspective-1000"
-              style={{
-                 ['--transform-end' as any]: endTransform,
-                 animationName: 'deal-card',
-                 animationFillMode: 'forwards',
-                 animationDuration: '0.5s',
-                 animationTimingFunction: 'ease-out'
-              }}
-            >
-                <div className={cn("relative w-full h-full transform-style-3d", {"animate-flip-y": isFlipping})}>
-                    <div className="absolute w-full h-full backface-hidden transform rotate-y-180">
-                      {player.card && <CardFace rank={player.card.rank} suit={player.card.suit} isFlipping={isFlipping} />}
-                    </div>
-                    <div className="absolute w-full h-full backface-hidden">
-                      <CardBack isFlipping={isFlipping} />
-                    </div>
-                </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+    );
 };
 
 export default CardDealAnimation;
-

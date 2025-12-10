@@ -299,6 +299,21 @@ const CashGameManager: React.FC = () => {
     }
 
     if (type === 'buy-in') {
+      let seat: number | undefined = undefined;
+      if (positionsSet) {
+        const occupiedSeats = new Set(players.map(p => p.seat));
+        for (let i = 1; i <= 10; i++) { // Assumindo max 10 assentos
+          if (!occupiedSeats.has(i)) {
+            seat = i;
+            break;
+          }
+        }
+        if (seat === undefined) {
+          toast({ variant: 'destructive', title: 'Mesa Cheia', description: 'Não há assentos disponíveis.'});
+          return;
+        }
+      }
+
       const newPlayer: Player = {
         id: players.length > 0 ? Math.max(...players.map(p => p.id), ...cashedOutPlayers.map(p => p.id)) + 1 : 1,
         name: playerName!,
@@ -308,8 +323,9 @@ const CashGameManager: React.FC = () => {
             amount: amount,
             chips: chipDistribution,
         }],
+        seat: seat,
       };
-      setPlayers(prevPlayers => [...prevPlayers, newPlayer]);
+      setPlayers(prevPlayers => [...prevPlayers, newPlayer].sort((a,b) => (a.seat || 99) - (b.seat || 99)));
       toast({ title: 'Jogador Adicionado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
       setNewPlayerName('');
       setNewPlayerBuyIn('');
@@ -590,36 +606,32 @@ const CashGameManager: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            {!positionsSet && (
-                 <Card>
-                 <CardHeader>
-                   <CardTitle className="flex items-center gap-2">
-                     <UserPlus /> Adicionar Jogador
-                   </CardTitle>
-                 </CardHeader>
-                 <CardContent>
-                   <div className="flex flex-col md:flex-row gap-4">
-                     <Input
-                       placeholder="Nome do Jogador"
-                       value={newPlayerName}
-                       onChange={(e) => setNewPlayerName(e.target.value)}
-                       disabled={positionsSet}
-                     />
-                     <Input
-                       type="number"
-                       placeholder="Valor do Buy-in (R$)"
-                       value={newPlayerBuyIn}
-                       onChange={(e) => setNewPlayerBuyIn(e.target.value)}
-                       disabled={positionsSet}
-                     />
-                     <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto" disabled={positionsSet}>
-                       <PlusCircle className="mr-2" />
-                       Adicionar
-                     </Button>
-                   </div>
-                 </CardContent>
-               </Card>
-            )}
+            <Card>
+             <CardHeader>
+               <CardTitle className="flex items-center gap-2">
+                 <UserPlus /> Adicionar Jogador
+               </CardTitle>
+             </CardHeader>
+             <CardContent>
+               <div className="flex flex-col md:flex-row gap-4">
+                 <Input
+                   placeholder="Nome do Jogador"
+                   value={newPlayerName}
+                   onChange={(e) => setNewPlayerName(e.target.value)}
+                 />
+                 <Input
+                   type="number"
+                   placeholder="Valor do Buy-in (R$)"
+                   value={newPlayerBuyIn}
+                   onChange={(e) => setNewPlayerBuyIn(e.target.value)}
+                 />
+                 <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto">
+                   <PlusCircle className="mr-2" />
+                   Adicionar
+                 </Button>
+               </div>
+             </CardContent>
+           </Card>
 
             {positionsSet && (
                 <Card>
