@@ -53,25 +53,28 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
     const dealTimer = setTimeout(() => {
       let index = 0;
       const interval = setInterval(() => {
+        if (index >= players.length) {
+            clearInterval(interval);
+            // Start flipping after all cards are dealt
+            const flipTimer = setTimeout(() => {
+               let flipIndex = 0;
+               const flipInterval = setInterval(() => {
+                  if (flipIndex >= players.length) {
+                      clearInterval(flipInterval);
+                      // All animations are done
+                      setTimeout(onComplete, 2000);
+                      return;
+                  }
+                  setFlippingCards(prev => [...prev, players[flipIndex].id]);
+                  flipIndex++;
+               }, 200);
+            }, 500); // Wait half a second after dealing
+            return;
+        }
+        
         setDealtCards(prev => [...prev, players[index].id]);
         index++;
-        if (index === players.length) {
-          clearInterval(interval);
-          
-          // Start flipping after all cards are dealt
-          const flipTimer = setTimeout(() => {
-             let flipIndex = 0;
-             const flipInterval = setInterval(() => {
-                setFlippingCards(prev => [...prev, players[flipIndex].id]);
-                flipIndex++;
-                if(flipIndex === players.length) {
-                    clearInterval(flipInterval);
-                     // All animations are done
-                    setTimeout(onComplete, 2000);
-                }
-             }, 200);
-          }, 500); // Wait half a second after dealing
-        }
+
       }, 300); // Stagger deal animation
     }, 500); // Initial delay
 
