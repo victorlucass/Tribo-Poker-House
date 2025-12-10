@@ -233,6 +233,10 @@ const CashGameManager: React.FC = () => {
   } | null>(null);
   const [manualChipCounts, setManualChipCounts] = useState<Map<number, number>>(new Map());
 
+  // Settlement State
+  const [croupierTips, setCroupierTips] = useState(0);
+  const [rakeAmount, setRakeAmount] = useState(0);
+
   const sortedChips = useMemo(() => [...chips].sort((a, b) => a.value - b.value), [chips]);
 
   const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy') => {
@@ -459,8 +463,8 @@ const CashGameManager: React.FC = () => {
   }, [players, cashedOutPlayers, getPlayerSettlementData]);
 
   const settlementDifference = useMemo(() => {
-      return totalSettlementValue - totalSessionBuyIn;
-  }, [totalSettlementValue, totalSessionBuyIn]);
+      return totalSettlementValue + croupierTips + rakeAmount - totalSessionBuyIn;
+  }, [totalSettlementValue, totalSessionBuyIn, croupierTips, rakeAmount]);
 
   const settlementChipsInPlay = useMemo(() => {
     // Total de fichas distribuídas em toda a sessão
@@ -542,6 +546,8 @@ const CashGameManager: React.FC = () => {
       setNewPlayerName('');
       setNewPlayerBuyIn('');
       setIsSettlementOpen(false);
+      setCroupierTips(0);
+      setRakeAmount(0);
       toast({ title: "Jogo Reiniciado!", description: "Tudo pronto para uma nova sessão."})
   }
 
@@ -956,7 +962,7 @@ const CashGameManager: React.FC = () => {
                      <DialogHeader>
                         <DialogTitle>Acerto de Contas Final</DialogTitle>
                         <DialogDescription>
-                            Insira a contagem final de fichas para cada jogador. O sistema calculará automaticamente os valores a serem pagos.
+                            Insira a contagem final de fichas, gorjetas e rake. O sistema calculará automaticamente os valores a serem pagos.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="overflow-y-auto pr-4 -mr-4 h-full">
@@ -1017,13 +1023,36 @@ const CashGameManager: React.FC = () => {
                         
                         <Separator className="my-6" />
 
+                        <div className="grid md:grid-cols-2 gap-6 mb-6">
+                            <div>
+                                <Label htmlFor="croupier-tips">Gorjeta do Croupier (R$)</Label>
+                                <Input 
+                                    id="croupier-tips"
+                                    type="number"
+                                    value={croupierTips || ''}
+                                    onChange={e => setCroupierTips(parseFloat(e.target.value) || 0)}
+                                    placeholder="Valor da gorjeta"
+                                />
+                            </div>
+                             <div>
+                                <Label htmlFor="rake-amount">Rake da Casa (R$)</Label>
+                                <Input 
+                                    id="rake-amount"
+                                    type="number"
+                                    value={rakeAmount || ''}
+                                    onChange={e => setRakeAmount(parseFloat(e.target.value) || 0)}
+                                    placeholder="Valor do rake"
+                                />
+                            </div>
+                        </div>
+
                         {Math.abs(settlementDifference) < 0.01 ? (
                             <div className="p-4 rounded-md bg-green-900/50 border border-green-500">
                                 <div className="flex items-center gap-2">
                                     <CheckCircle2 className="text-green-400" />
                                     <h3 className="text-lg font-bold text-green-300">Contas Batem!</h3>
                                 </div>
-                                <p className="text-green-400/80 mt-1">O valor total contado corresponde ao valor total que entrou na mesa.</p>
+                                <p className="text-green-400/80 mt-1">O valor total (fichas + gorjeta + rake) corresponde ao valor total que entrou na mesa.</p>
                                 <div className="mt-4">
                                     <h4 className="font-bold mb-2 text-green-300">Pagamentos Finais:</h4>
                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
@@ -1061,16 +1090,16 @@ const CashGameManager: React.FC = () => {
                                     <h3 className="text-lg font-bold text-red-300">Erro na Contagem!</h3>
                                 </div>
                                 <p className="text-red-400/80 mt-1">
-                                    A soma das fichas contadas não corresponde ao total de buy-ins. Verifique a contagem de fichas de cada jogador.
+                                    A soma das fichas, gorjeta e rake não corresponde ao total de buy-ins. Verifique a contagem de fichas de cada jogador.
                                 </p>
                             </div>
                         )}
                     </div>
                     <DialogFooter className="mt-4 gap-2 sm:gap-0">
-                        <div className="flex-1 text-center md:text-right font-mono bg-muted p-2 rounded-md">
+                        <div className="flex-1 text-center md:text-right font-mono bg-muted p-2 rounded-md text-xs">
                            TOTAL ENTRADO: <span className="font-bold">{totalSessionBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                            <br/>
-                           TOTAL CONTADO: <span className="font-bold">{totalSettlementValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                           TOTAL CONTADO: <span className="font-bold">{totalSettlementValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> (+{croupierTips.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Gorjeta) (+{rakeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
                            <br/>
                            Diferença: <span className={cn("font-bold", Math.abs(settlementDifference) >= 0.01 ? "text-destructive" : "text-green-400")}>{settlementDifference.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         </div>
