@@ -221,7 +221,7 @@ const CashGameManager: React.FC = () => {
       return;
     }
     const { playersWithDealtCards, sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
-    setPlayersWithCards(playersWithDealtCards);
+    setPlayersWithCards(playersWithDealtCards); // For the animation to show cards in registration order
     setPlayers(sortedPlayers); // This now contains players with seat numbers and cards
     setDealerId(dealer.id);
     setIsDealing(true);
@@ -589,6 +589,7 @@ const CashGameManager: React.FC = () => {
       setRakeChipCounts(new Map());
       setPositionsSet(false);
       setDealerId(null);
+      setPlayersWithCards([]);
       toast({ title: "Jogo Reiniciado!", description: "Tudo pronto para uma nova sessão."})
   }
 
@@ -698,7 +699,7 @@ const CashGameManager: React.FC = () => {
                              const playerTotalChips = getPlayerTotalChips(player);
                              return (
                                 <TableRow key={player.id}>
-                                  <TableCell className="font-medium">{player.seat ? `(${player.seat}) ` : ''}{player.name}</TableCell>
+                                  <TableCell className="font-medium">{player.name}</TableCell>
                                   <TableCell className="text-right font-mono">
                                     {playerTotalBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                   </TableCell>
