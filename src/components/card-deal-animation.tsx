@@ -50,35 +50,49 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
   const [flippingCards, setFlippingCards] = useState<number[]>([]);
 
   useEffect(() => {
+    let dealInterval: NodeJS.Timeout;
+    let flipInterval: NodeJS.Timeout;
+
     const dealTimer = setTimeout(() => {
       let index = 0;
-      const interval = setInterval(() => {
+      dealInterval = setInterval(() => {
         if (index >= players.length) {
-            clearInterval(interval);
+            clearInterval(dealInterval);
             // Start flipping after all cards are dealt
             const flipTimer = setTimeout(() => {
                let flipIndex = 0;
-               const flipInterval = setInterval(() => {
+               flipInterval = setInterval(() => {
                   if (flipIndex >= players.length) {
                       clearInterval(flipInterval);
                       // All animations are done
                       setTimeout(onComplete, 2000);
                       return;
                   }
-                  setFlippingCards(prev => [...prev, players[flipIndex].id]);
+                  // This check is important, player might be undefined
+                  const playerToFlip = players[flipIndex];
+                  if (playerToFlip) {
+                    setFlippingCards(prev => [...prev, playerToFlip.id]);
+                  }
                   flipIndex++;
                }, 200);
             }, 500); // Wait half a second after dealing
             return;
         }
         
-        setDealtCards(prev => [...prev, players[index].id]);
+        const playerToDeal = players[index];
+        if (playerToDeal) {
+          setDealtCards(prev => [...prev, playerToDeal.id]);
+        }
         index++;
 
       }, 300); // Stagger deal animation
     }, 500); // Initial delay
 
-    return () => clearTimeout(dealTimer);
+    return () => {
+        clearTimeout(dealTimer);
+        clearInterval(dealInterval);
+        clearInterval(flipInterval);
+    };
   }, [players, onComplete]);
   
   const getSeatPosition = (index: number, totalPlayers: number) => {
@@ -124,7 +138,7 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
             >
                 <div className={cn("relative w-full h-full transform-style-3d", {"": isFlipping})}>
                     <CardBack isFlipping={isFlipping} />
-                    <CardFace rank={player.card!.rank} suit={player.card!.suit} isFlipping={isFlipping} />
+                    {player.card && <CardFace rank={player.card.rank} suit={player.card.suit} isFlipping={isFlipping} />}
                 </div>
             </div>
           );
