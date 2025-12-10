@@ -1,0 +1,101 @@
+{
+    "entities": {
+        "CashGame": {
+            "title": "Cash Game Session",
+            "description": "Represents a single session of a cash game, containing all players, chips, and settings.",
+            "type": "object",
+            "properties": {
+                "id": { "type": "string", "description": "Unique identifier for the game session." },
+                "chips": { "type": "array", "items": { "$ref": "#/entities/CashGameChip" } },
+                "players": { "type": "array", "items": { "$ref": "#/entities/CashGamePlayer" } },
+                "cashedOutPlayers": { "type": "array", "items": { "$ref": "#/entities/CashedOutPlayer" } },
+                "positionsSet": { "type": "boolean" },
+                "dealerId": { "type": ["number", "null"] },
+                "createdAt": { "type": "string", "format": "date-time" }
+            },
+            "required": ["id", "chips", "players", "cashedOutPlayers", "positionsSet", "createdAt"]
+        },
+        "CashGameChip": {
+            "title": "Cash Game Chip",
+            "description": "Defines a single type of chip used in the cash game.",
+            "type": "object",
+            "properties": {
+                "id": { "type": "number" },
+                "value": { "type": "number" },
+                "color": { "type": "string" },
+                "name": { "type": "string" }
+            },
+            "required": ["id", "value", "color", "name"]
+        },
+        "CashGamePlayer": {
+            "title": "Cash Game Player",
+            "description": "Represents a player currently at the table.",
+            "type": "object",
+            "properties": {
+                "id": { "type": "number" },
+                "name": { "type": "string" },
+                "transactions": { "type": "array", "items": { "$ref": "#/entities/PlayerTransaction" } },
+                "finalChipCounts": { "type": "object", "additionalProperties": { "type": "number" } },
+                "seat": { "type": "number" },
+                "card": { "$ref": "#/entities/Card" }
+            },
+            "required": ["id", "name", "transactions"]
+        },
+        "PlayerTransaction": {
+            "title": "Player Transaction",
+            "description": "A single financial transaction for a player (buy-in, rebuy).",
+            "type": "object",
+            "properties": {
+                "id": { "type": "number" },
+                "type": { "type": "string", "enum": ["buy-in", "rebuy", "add-on"] },
+                "amount": { "type": "number" },
+                "chips": { "type": "array", "items": { "$ref": "#/entities/ChipDistribution" } }
+            },
+            "required": ["id", "type", "amount", "chips"]
+        },
+        "ChipDistribution": {
+            "title": "Chip Distribution",
+            "description": "The count of a specific chip in a transaction.",
+            "type": "object",
+            "properties": {
+                "chipId": { "type": "number" },
+                "count": { "type": "number" }
+            },
+            "required": ["chipId", "count"]
+        },
+        "CashedOutPlayer": {
+            "title": "Cashed Out Player",
+            "description": "Represents a player who has left the table.",
+            "type": "object",
+            "properties": {
+                "id": { "type": "number" },
+                "name": { "type": "string" },
+                "transactions": { "type": "array", "items": { "$ref": "#/entities/PlayerTransaction" } },
+                "cashedOutAt": { "type": "string", "format": "date-time" },
+                "amountReceived": { "type": "number" },
+                "chipCounts": { "type": "object", "additionalProperties": { "type": "number" } },
+                "totalInvested": { "type": "number" }
+            },
+            "required": ["id", "name", "transactions", "cashedOutAt", "amountReceived", "chipCounts", "totalInvested"]
+        },
+        "Card": {
+            "title": "Playing Card",
+            "description": "A standard playing card.",
+            "type": "object",
+            "properties": {
+                "suit": { "type": "string" },
+                "rank": { "type": "string" }
+            },
+            "required": ["suit", "rank"]
+        }
+    },
+    "auth": {
+        "providers": []
+    },
+    "firestore": {
+        "/cash-games/{gameId}": {
+            "schema": { "$ref": "#/entities/CashGame" },
+            "description": "Stores the state of a single cash game session."
+        }
+    }
+}

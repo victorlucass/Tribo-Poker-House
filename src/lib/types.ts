@@ -40,11 +40,10 @@ export interface CashGamePlayer {
     id: number;
     name: string;
     transactions: PlayerTransaction[];
-    finalChipCounts?: Map<number, number>;
+    finalChipCounts?: Record<string, number>; // Firestore can't store Maps, use object
     seat?: number; // Posição na mesa
     card?: Card; // Carta recebida no sorteio
 }
-
 
 export interface PlayerTransaction {
     id: number;
@@ -58,8 +57,18 @@ export interface CashedOutPlayer {
   id: number;
   name: string;
   transactions: PlayerTransaction[];
-  cashedOutAt: Date;
+  cashedOutAt: string; // Store as ISO string
   amountReceived: number;
-  chipCounts: Map<number, number>;
+  chipCounts: Record<string, number>; // Firestore can't store Maps, use object
   totalInvested: number;
+}
+
+export interface CashGame {
+    id: string;
+    chips: CashGameChip[];
+    players: CashGamePlayer[];
+    cashedOutPlayers: CashedOutPlayer[];
+    positionsSet: boolean;
+    dealerId: number | null;
+    createdAt: string; // Store as ISO string
 }
