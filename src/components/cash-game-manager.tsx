@@ -98,7 +98,7 @@ const ChipIcon = ({ color, className }: { color: string; className?: string }) =
 const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: number; count: number }[] => {
     let remainingAmount = buyIn;
     
-    // Regra: Se buyIn <= 30, usar fichas < 10. Se > 30, usar todas. Se > 50, usar 1 e 10.
+    // Regra: Se buyIn > 50, usar 1 e 10. Se <= 30, usar fichas < 10. Se não, todas.
     const chipsToUse = buyIn > 50
       ? availableChips.filter(c => c.value === 1 || c.value === 10)
       : buyIn <= 30 
@@ -107,39 +107,36 @@ const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: numbe
 
     const sortedChips = [...chipsToUse].sort((a, b) => b.value - a.value);
     
-    // Se não houver fichas para o valor, retorna erro.
     if(sortedChips.length === 0){
         return [];
     }
 
     const distribution: Map<number, number> = new Map(sortedChips.map(c => [c.id, 0]));
 
-    // 1. Tenta alocar uma pequena quantidade de fichas de centavos primeiro para garantir variedade
+    // 1. Tenta alocar uma pequena quantidade de fichas de centavos primeiro
     const smallChipsFirst = [...sortedChips].sort((a, b) => a.value - b.value).filter(c => c.value < 1);
     for (const chip of smallChipsFirst) {
-        // Tenta alocar um número que faça sentido para o buy-in
-        const idealCount = Math.min(Math.floor(buyIn * 0.1 / chip.value), 5); // Ex: 10% do buy-in, max 5 fichas
+        const idealCount = Math.min(Math.floor(buyIn * 0.1 / chip.value), 4); // Ex: 10% do buy-in, max 4 fichas
         if (remainingAmount >= chip.value * idealCount) {
             distribution.set(chip.id, (distribution.get(chip.id) || 0) + idealCount);
             remainingAmount = parseFloat((remainingAmount - chip.value * idealCount).toFixed(2));
         }
     }
     
-    // 2. Distribui o restante de forma mais equilibrada, priorizando fichas menores no final
+    // 2. Distribui uma parte maior do valor restante de forma mais equilibrada
     for (const chip of sortedChips) {
         if (remainingAmount <= 0) break;
         if(chip.value > remainingAmount) continue;
 
         let allocationPercentage = 0;
-        if (chip.value >= 10) allocationPercentage = 0.5; // 50% para fichas de 10+
-        else if (chip.value >= 1) allocationPercentage = 0.4; // 40% para fichas de 1 a 9
-        else allocationPercentage = 0.3; // 30% para fichas < 1 (aumentado)
+        if (chip.value >= 10) allocationPercentage = 0.5;
+        else if (chip.value >= 1) allocationPercentage = 0.4;
+        else allocationPercentage = 0.3; // Aumentado para priorizar centavos
 
         let targetValueForChip = remainingAmount * allocationPercentage;
         
         let count = Math.floor(targetValueForChip / chip.value);
 
-        // Arredonda para múltiplos de 5 para fichas de centavos para facilitar contagem
         if(chip.value < 1 && count > 5) {
             count = Math.round(count / 5) * 5;
         }
@@ -153,10 +150,9 @@ const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: numbe
         }
     }
 
-    // 3. Preenche o restante com a lógica "greedy" para garantir que o valor bata
+    // 3. Preenche o restante com a lógica "greedy"
     for (const chip of sortedChips) {
       if (remainingAmount < chip.value) continue;
-
       const count = Math.floor(remainingAmount / chip.value);
       if (count > 0) {
         distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
@@ -164,12 +160,12 @@ const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: numbe
       }
     }
 
-    // 4. Se ainda sobrar poeira, adiciona nas menores fichas
+    // 4. Limpeza final para poeira de centavos
     if (remainingAmount > 0.01) {
         const smallestChips = [...sortedChips].sort((a,b) => a.value-b.value);
         for (const chip of smallestChips) {
              if (remainingAmount < chip.value) continue;
-             const count = Math.floor(remainingAmount / chip.value);
+             const count = Math.ceil(remainingAmount / chip.value); // Usa teto para tentar fechar
              if (count > 0) {
                 distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
                 remainingAmount = parseFloat((remainingAmount - count * chip.value).toFixed(2));
@@ -177,7 +173,7 @@ const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: numbe
         }
     }
 
-    // 5. Validação final
+    // 5. Validação final e fallback
     const finalDistribution = Array.from(distribution.entries()).map(([chipId, count]) => ({ chipId, count }));
     const totalDistributedValue = finalDistribution.reduce((acc, dist) => {
         const chip = availableChips.find(c => c.id === dist.chipId);
@@ -185,8 +181,7 @@ const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: numbe
     }, 0);
 
     if (Math.abs(totalDistributedValue - buyIn) > 0.01) {
-        console.warn("Complex distribution failed. Value mismatch.", {totalDistributedValue, buyIn});
-        // Fallback para a distribuição simples
+        console.warn("Complex distribution failed. Falling back to greedy.", {totalDistributedValue, buyIn});
         const greedyDistribution: { chipId: number; count: number }[] = [];
         let greedyAmount = buyIn;
         for (const chip of sortedChips) {
@@ -196,7 +191,7 @@ const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: numbe
                 greedyAmount = parseFloat((greedyAmount - count * chip.value).toFixed(2));
             }
         }
-        if (Math.abs(greedyAmount) > 0.01) return []; // Falha na distribuição
+        if (Math.abs(greedyAmount) > 0.01) return []; // Falha total
         return greedyDistribution;
     }
 
@@ -234,8 +229,9 @@ const CashGameManager: React.FC = () => {
   const [manualChipCounts, setManualChipCounts] = useState<Map<number, number>>(new Map());
 
   // Settlement State
-  const [croupierTips, setCroupierTips] = useState(0);
-  const [rakeAmount, setRakeAmount] = useState(0);
+  const [isSettlementOpen, setIsSettlementOpen] = useState(false);
+  const [croupierTipsChipCounts, setCroupierTipsChipCounts] = useState<Map<number, number>>(new Map());
+  const [rakeChipCounts, setRakeChipCounts] = useState<Map<number, number>>(new Map());
 
   const sortedChips = useMemo(() => [...chips].sort((a, b) => a.value - b.value), [chips]);
 
@@ -432,7 +428,6 @@ const CashGameManager: React.FC = () => {
   }, [players, cashedOutPlayers]);
   
   // Settlement Logic
-  const [isSettlementOpen, setIsSettlementOpen] = useState(false);
   const handlePlayerChipCountChange = (playerId: number, chipId: number, count: number) => {
     setPlayers(players.map(p => {
         if (p.id === playerId) {
@@ -442,6 +437,18 @@ const CashGameManager: React.FC = () => {
         }
         return p;
     }));
+  };
+  
+   const handleTipRakeChipCountChange = (
+    type: 'tips' | 'rake',
+    chipId: number,
+    count: number
+  ) => {
+    if (type === 'tips') {
+      setCroupierTipsChipCounts(prev => new Map(prev).set(chipId, count));
+    } else {
+      setRakeChipCounts(prev => new Map(prev).set(chipId, count));
+    }
   };
 
   const getPlayerSettlementData = useCallback((player: Player) => {
@@ -454,6 +461,20 @@ const CashGameManager: React.FC = () => {
     return { totalInvested, finalValue, balance };
   }, [sortedChips]);
 
+  const croupierTipsValue = useMemo(() => {
+    return Array.from(croupierTipsChipCounts.entries()).reduce((acc, [chipId, count]) => {
+      const chip = sortedChips.find(c => c.id === chipId);
+      return acc + (chip ? chip.value * count : 0);
+    }, 0);
+  }, [croupierTipsChipCounts, sortedChips]);
+
+  const rakeValue = useMemo(() => {
+    return Array.from(rakeChipCounts.entries()).reduce((acc, [chipId, count]) => {
+      const chip = sortedChips.find(c => c.id === chipId);
+      return acc + (chip ? chip.value * count : 0);
+    }, 0);
+  }, [rakeChipCounts, sortedChips]);
+
   const totalSettlementValue = useMemo(() => {
     const activePlayersValue = players.reduce((total, player) => {
         return total + getPlayerSettlementData(player).finalValue;
@@ -463,8 +484,8 @@ const CashGameManager: React.FC = () => {
   }, [players, cashedOutPlayers, getPlayerSettlementData]);
 
   const settlementDifference = useMemo(() => {
-      return totalSettlementValue + croupierTips + rakeAmount - totalSessionBuyIn;
-  }, [totalSettlementValue, totalSessionBuyIn, croupierTips, rakeAmount]);
+      return totalSettlementValue + croupierTipsValue + rakeValue - totalSessionBuyIn;
+  }, [totalSettlementValue, totalSessionBuyIn, croupierTipsValue, rakeValue]);
 
   const settlementChipsInPlay = useMemo(() => {
     // Total de fichas distribuídas em toda a sessão
@@ -546,8 +567,8 @@ const CashGameManager: React.FC = () => {
       setNewPlayerName('');
       setNewPlayerBuyIn('');
       setIsSettlementOpen(false);
-      setCroupierTips(0);
-      setRakeAmount(0);
+      setCroupierTipsChipCounts(new Map());
+      setRakeChipCounts(new Map());
       toast({ title: "Jogo Reiniciado!", description: "Tudo pronto para uma nova sessão."})
   }
 
@@ -962,7 +983,7 @@ const CashGameManager: React.FC = () => {
                      <DialogHeader>
                         <DialogTitle>Acerto de Contas Final</DialogTitle>
                         <DialogDescription>
-                            Insira a contagem final de fichas, gorjetas e rake. O sistema calculará automaticamente os valores a serem pagos.
+                            Insira a contagem final de fichas para cada jogador, gorjetas e rake. O sistema calculará os valores.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="overflow-y-auto pr-4 -mr-4 h-full">
@@ -979,7 +1000,8 @@ const CashGameManager: React.FC = () => {
                                 ))}
                             </div>
                         </div>
-
+                       
+                        <h3 className="text-xl font-bold mb-2">Jogadores</h3>
                        <Table>
                             <TableHeader>
                                 <TableRow>
@@ -1023,28 +1045,64 @@ const CashGameManager: React.FC = () => {
                         
                         <Separator className="my-6" />
 
-                        <div className="grid md:grid-cols-2 gap-6 mb-6">
-                            <div>
-                                <Label htmlFor="croupier-tips">Gorjeta do Croupier (R$)</Label>
-                                <Input 
-                                    id="croupier-tips"
+                        <div className="grid md:grid-cols-2 gap-8">
+                          <div>
+                            <h3 className="text-xl font-bold mb-2">Gorjeta do Croupier</h3>
+                            <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                              {sortedChips.map(chip => (
+                                <div key={`tips-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
+                                  <Label htmlFor={`tips-chip-${chip.id}`} className="text-sm flex items-center gap-2">
+                                    <ChipIcon color={chip.color}/>
+                                    Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  </Label>
+                                  <Input
+                                    id={`tips-chip-${chip.id}`}
                                     type="number"
-                                    value={croupierTips || ''}
-                                    onChange={e => setCroupierTips(parseFloat(e.target.value) || 0)}
-                                    placeholder="Valor da gorjeta"
-                                />
+                                    min="0"
+                                    placeholder="Qtd."
+                                    className="font-mono text-center"
+                                    value={croupierTipsChipCounts.get(chip.id) || ''}
+                                    onChange={e => handleTipRakeChipCountChange('tips', chip.id, parseInt(e.target.value) || 0)}
+                                  />
+                                </div>
+                              ))}
+                              <Separator className="my-2"/>
+                              <div className="flex justify-between items-center font-bold">
+                                <span>Total Gorjeta:</span>
+                                <span>{croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                              </div>
                             </div>
-                             <div>
-                                <Label htmlFor="rake-amount">Rake da Casa (R$)</Label>
-                                <Input 
-                                    id="rake-amount"
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold mb-2">Rake da Casa</h3>
+                            <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                              {sortedChips.map(chip => (
+                                <div key={`rake-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
+                                  <Label htmlFor={`rake-chip-${chip.id}`} className="text-sm flex items-center gap-2">
+                                    <ChipIcon color={chip.color}/>
+                                    Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  </Label>
+                                  <Input
+                                    id={`rake-chip-${chip.id}`}
                                     type="number"
-                                    value={rakeAmount || ''}
-                                    onChange={e => setRakeAmount(parseFloat(e.target.value) || 0)}
-                                    placeholder="Valor do rake"
-                                />
+                                    min="0"
+                                    placeholder="Qtd."
+                                    className="font-mono text-center"
+                                    value={rakeChipCounts.get(chip.id) || ''}
+                                    onChange={e => handleTipRakeChipCountChange('rake', chip.id, parseInt(e.target.value) || 0)}
+                                  />
+                                </div>
+                              ))}
+                              <Separator className="my-2"/>
+                              <div className="flex justify-between items-center font-bold">
+                                <span>Total Rake:</span>
+                                <span>{rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                              </div>
                             </div>
+                          </div>
                         </div>
+
+                        <Separator className="my-6" />
 
                         {Math.abs(settlementDifference) < 0.01 ? (
                             <div className="p-4 rounded-md bg-green-900/50 border border-green-500">
@@ -1099,7 +1157,7 @@ const CashGameManager: React.FC = () => {
                         <div className="flex-1 text-center md:text-right font-mono bg-muted p-2 rounded-md text-xs">
                            TOTAL ENTRADO: <span className="font-bold">{totalSessionBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                            <br/>
-                           TOTAL CONTADO: <span className="font-bold">{totalSettlementValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> (+{croupierTips.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Gorjeta) (+{rakeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
+                           TOTAL CONTADO: <span className="font-bold">{totalSettlementValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> (+{croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Gorjeta) (+{rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
                            <br/>
                            Diferença: <span className={cn("font-bold", Math.abs(settlementDifference) >= 0.01 ? "text-destructive" : "text-green-400")}>{settlementDifference.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         </div>
