@@ -54,13 +54,15 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
     useEffect(() => {
         if (players.length === 0) return;
 
-        const revealTimer = setTimeout(() => {
+        const presentationTimer = setTimeout(() => {
             const interval = setInterval(() => {
                 setCurrentPlayerIndex(prevIndex => {
                     const nextIndex = prevIndex + 1;
                     if (nextIndex > players.length) {
                         clearInterval(interval);
-                        const completeTimeout = setTimeout(onComplete, 2000);
+                        // Wait a bit after the last card is shown before completing
+                        const completeTimeout = setTimeout(onComplete, 2000); 
+                        // clean up this timeout as well
                         return prevIndex;
                     }
                     return nextIndex;
@@ -70,9 +72,9 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
             return () => {
                 clearInterval(interval);
             }
-        }, 500); // Initial delay
+        }, 500); // Initial delay before starting the presentation
 
-        return () => clearTimeout(revealTimer);
+        return () => clearTimeout(presentationTimer);
 
     }, [players, onComplete]);
   
@@ -80,8 +82,11 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center overflow-hidden">
             <div className="w-full max-w-sm h-full flex flex-col items-center justify-center">
+                {/* We map over original players array to show them in registration order */}
                 {players.map((player, index) => {
+                    // This determines if the current player in the sequence is being shown
                     const isActive = currentPlayerIndex === index + 1;
+                    // This helps fade out players that have already been shown
                     const wasActive = currentPlayerIndex > index + 1;
 
                     return (
@@ -89,22 +94,30 @@ const CardDealAnimation: React.FC<CardDealAnimationProps> = ({ players, onComple
                             key={player.id}
                             className={cn(
                                 "absolute transition-all duration-500 ease-in-out",
+                                // Active player is centered and visible
                                 isActive ? 'opacity-100 transform scale-100' : 'opacity-0 transform scale-90',
+                                // Previously active players fade out and move up
                                 wasActive ? 'opacity-0 transform -translate-y-20' : ''
                             )}
                             style={{ zIndex: players.length - index }}
                         >
                             <div className={cn("relative w-48 h-64 perspective-1000")}>
+                               {/* The card flip animation happens only when the player is active */}
                                <div className={cn("relative w-full h-full transform-style-3d", {"animate-flip-y": isActive})}>
+                                    {/* Back of the card, visible after flip */}
                                     <div className="absolute w-full h-full backface-hidden transform rotate-y-180">
                                       {player.card && <CardFace rank={player.card.rank} suit={player.card.suit} />}
                                     </div>
+                                    {/* Front of the card, visible before flip */}
                                     <div className="absolute w-full h-full backface-hidden">
                                       <CardBack />
                                     </div>
                                 </div>
                             </div>
-                             <div className={cn("mt-4 text-center text-white text-2xl font-bold transition-opacity duration-500 delay-500", isActive ? 'opacity-100' : 'opacity-0')}>
+                             <div className={cn(
+                                 "mt-4 text-center text-white text-2xl font-bold transition-opacity duration-500 delay-500", 
+                                 isActive ? 'opacity-100' : 'opacity-0'
+                              )}>
                                 {player.name}
                             </div>
                         </div>

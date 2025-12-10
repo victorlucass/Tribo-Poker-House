@@ -188,6 +188,7 @@ const CashGameManager: React.FC = () => {
 
   // Position sorting state
   const [isDealing, setIsDealing] = useState(false);
+  const [playersWithCards, setPlayersWithCards] = useState<Player[]>([]);
   const [dealerId, setDealerId] = useState<number | null>(null);
   const [positionsSet, setPositionsSet] = useState(false);
 
@@ -219,8 +220,9 @@ const CashGameManager: React.FC = () => {
       toast({ variant: 'destructive', title: 'Jogadores Insuficientes', description: 'Precisa de pelo menos 2 jogadores para sortear as posições.'});
       return;
     }
-    const { sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
-    setPlayers(sortedPlayers);
+    const { playersWithDealtCards, sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
+    setPlayersWithCards(playersWithDealtCards);
+    setPlayers(sortedPlayers); // This now contains players with seat numbers and cards
     setDealerId(dealer.id);
     setIsDealing(true);
   };
@@ -325,7 +327,11 @@ const CashGameManager: React.FC = () => {
         }],
         seat: seat,
       };
-      setPlayers(prevPlayers => [...prevPlayers, newPlayer].sort((a,b) => (a.seat || 99) - (b.seat || 99)));
+      const newPlayers = [...players, newPlayer];
+      if (positionsSet) {
+        newPlayers.sort((a,b) => (a.seat || 99) - (b.seat || 99))
+      }
+      setPlayers(newPlayers);
       toast({ title: 'Jogador Adicionado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
       setNewPlayerName('');
       setNewPlayerBuyIn('');
@@ -588,7 +594,7 @@ const CashGameManager: React.FC = () => {
 
   return (
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
-      {isDealing && <CardDealAnimation players={players} onComplete={onDealingComplete} />}
+      {isDealing && <CardDealAnimation players={playersWithCards} onComplete={onDealingComplete} />}
       <div className="mx-auto w-full max-w-7xl">
         <div className="flex items-center gap-4 mb-8">
           <Button asChild variant="outline" size="icon">
@@ -692,7 +698,7 @@ const CashGameManager: React.FC = () => {
                              const playerTotalChips = getPlayerTotalChips(player);
                              return (
                                 <TableRow key={player.id}>
-                                  <TableCell className="font-medium">{player.name}</TableCell>
+                                  <TableCell className="font-medium">{player.seat ? `(${player.seat}) ` : ''}{player.name}</TableCell>
                                   <TableCell className="text-right font-mono">
                                     {playerTotalBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                   </TableCell>

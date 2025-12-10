@@ -40,33 +40,39 @@ const compareCards = (a: Card, b: Card): number => {
   return SUIT_VALUES[b.suit] - SUIT_VALUES[a.suit]; // Higher suit as tie-breaker
 };
 
-export const sortPlayersAndSetDealer = (players: Player[]): { sortedPlayers: Player[], dealer: Player } => {
+export const sortPlayersAndSetDealer = (players: Player[]): { playersWithDealtCards: Player[], sortedPlayers: Player[], dealer: Player } => {
   if (players.length < 2) {
     throw new Error("Cannot sort positions with fewer than 2 players.");
   }
 
   const deck = shuffleDeck(createDeck());
   
-  // Deal one card to each player
-  const playersWithCards = players.map((player, index) => ({
+  // Deal one card to each player (in original registration order)
+  const playersWithDealtCards = players.map((player, index) => ({
     ...player,
     card: deck[index],
   }));
 
+  // Create a separate array for sorting to find the dealer
+  const playersToSort = [...playersWithDealtCards];
+
   // Find the player with the highest card
-  const highestCardPlayer = [...playersWithCards].sort((a, b) => compareCards(a.card, b.card))[0];
+  const highestCardPlayer = playersToSort.sort((a, b) => compareCards(a.card!, b.card!))[0];
   
-  const dealerIndex = playersWithCards.findIndex(p => p.id === highestCardPlayer.id);
+  const dealerIndex = playersWithDealtCards.findIndex(p => p.id === highestCardPlayer.id);
 
   // Set seat numbers starting from the dealer
   const sortedPlayers: Player[] = [];
-  for (let i = 0; i < playersWithCards.length; i++) {
-    const currentPlayerIndex = (dealerIndex + i) % playersWithCards.length;
+  for (let i = 0; i < playersWithDealtCards.length; i++) {
+    const currentPlayerIndex = (dealerIndex + i) % playersWithDealtCards.length;
     sortedPlayers.push({
-      ...playersWithCards[currentPlayerIndex],
+      ...playersWithDealtCards[currentPlayerIndex],
       seat: i + 1, // Dealer is seat 1
     });
   }
+  
+  // Final array sorted by the new seat number
+  sortedPlayers.sort((a, b) => a.seat! - b.seat!);
 
-  return { sortedPlayers, dealer: highestCardPlayer };
+  return { playersWithDealtCards, sortedPlayers, dealer: highestCardPlayer };
 };
