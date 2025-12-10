@@ -51,6 +51,7 @@ import {
   LogOut,
   History,
   Shuffle,
+  Copy,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -60,16 +61,10 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc } from '@/firebase';
-import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc, collection } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from './ui/skeleton';
-
-const initialChips: Chip[] = [
-  { id: 1, value: 0.25, color: '#22c55e', name: 'Verde' },
-  { id: 2, value: 0.5, color: '#ef4444', name: 'Vermelha' },
-  { id: 3, value: 1, color: '#f5f5f5', name: 'Branca' },
-  { id: 4, value: 10, color: '#171717', name: 'Preta' },
-];
+import { useRouter } from 'next/navigation';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -181,38 +176,37 @@ const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: numbe
     .sort((a, b) => a.chipId - b.chipId);
 };
 
-const GAME_ID = 'active-game';
+interface CashGameManagerProps {
+  gameId: string;
+}
 
-const CashGameManager: React.FC = () => {
+const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { toast } = useToast();
   const firestore = useFirestore();
-  const gameRef = useMemo(() => (firestore ? doc(firestore, 'cash-games', GAME_ID) : null), [firestore]);
+  const router = useRouter();
+
+  const gameRef = useMemo(() => {
+    if (!firestore || !gameId) return null;
+    return doc(firestore, 'cashGames', gameId);
+  }, [firestore, gameId]);
+
   const { data: game, status, error } = useDoc<CashGame>(gameRef);
 
-  const createGame = useCallback(() => {
-    if (gameRef) {
-      setDoc(gameRef, {
-          id: GAME_ID,
-          chips: initialChips,
-          players: [],
-          cashedOutPlayers: [],
-          positionsSet: false,
-          dealerId: null,
-          createdAt: new Date().toISOString(),
-      });
-    }
-  }, [gameRef]);
-
   const updateGame = useCallback(
-    (data: Partial<CashGame>) => {
+    async (data: Partial<CashGame>) => {
       if (gameRef) {
-        updateDoc(gameRef, data);
+        try {
+          await updateDoc(gameRef, data);
+        } catch (e) {
+          console.error("Failed to update game:", e);
+          toast({ variant: 'destructive', title: 'Erro de Sincronização', description: 'Não foi possível salvar as alterações.'})
+        }
       }
     },
-    [gameRef]
+    [gameRef, toast]
   );
   
-  const chips = game?.chips ?? initialChips;
+  const chips = game?.chips ?? [];
   const players = game?.players ?? [];
   const cashedOutPlayers = game?.cashedOutPlayers ?? [];
   const positionsSet = game?.positionsSet ?? false;
@@ -225,7 +219,7 @@ const CashGameManager: React.FC = () => {
   const [playerForDetails, setPlayerForDetails] = useState<Player | null>(null);
 
   const [isDealing, setIsDealing] = useState(false);
-  const [playersWithCards, setPlayersWithCards] = useState<Player[]>([]);
+  const [playersForAnimation, setPlayersForAnimation] = useState<Player[]>([]);
 
   const [isCashOutOpen, setIsCashOutOpen] = useState(false);
   const [playerToCashOut, setPlayerToCashOut] = useState<Player | null>(null);
@@ -252,13 +246,10 @@ const CashGameManager: React.FC = () => {
       return;
     }
     const { playersWithDealtCards, sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
-    // This state is just for the animation component
-    setPlayersWithCards(playersWithDealtCards);
-    // This is what is saved to the DB
+    setPlayersForAnimation(playersWithDealtCards);
     updateGame({
       players: sortedPlayers,
       dealerId: dealer.id,
-      positionsSet: false, // Will be set to true on animation complete
     });
     setIsDealing(true);
   };
@@ -352,7 +343,9 @@ const CashGameManager: React.FC = () => {
         }
       }
       
-      const newPlayerId = players.length > 0 ? Math.max(...players.map((p) => p.id), ...cashedOutPlayers.map((p) => p.id)) + 1 : 1;
+      const newPlayerId = (players.length > 0 || cashedOutPlayers.length > 0) 
+        ? Math.max(...players.map((p) => p.id), ...cashedOutPlayers.map((p) => p.id)) + 1 
+        : 1;
 
       const newPlayer: Player = {
         id: newPlayerId,
@@ -438,6 +431,12 @@ const CashGameManager: React.FC = () => {
   };
 
   const handleResetChips = () => {
+    const initialChips: Chip[] = [
+      { id: 1, value: 0.25, color: '#22c55e', name: 'Verde' },
+      { id: 2, value: 0.5, color: '#ef4444', name: 'Vermelha' },
+      { id: 3, value: 1, color: '#f5f5f5', name: 'Branca' },
+      { id: 4, value: 10, color: '#171717', name: 'Preta' },
+    ];
     if (players.length > 0 || cashedOutPlayers.length > 0) {
       toast({ variant: 'destructive', title: 'Ação Bloqueada', description: 'Não é possível resetar as fichas com um jogo em andamento.' });
       return;
@@ -633,12 +632,9 @@ const CashGameManager: React.FC = () => {
   const resetGame = async () => {
     if (gameRef) {
       await deleteDoc(gameRef);
+      toast({ title: 'Sessão Finalizada!', description: 'A sala foi apagada e está pronta para ser recriada.' });
+      router.push('/cash-game');
     }
-    setIsSettlementOpen(false);
-    setCroupierTipsChipCounts(new Map());
-    setRakeChipCounts(new Map());
-    setPlayersWithCards([]);
-    toast({ title: 'Jogo Reiniciado!', description: 'Tudo pronto para uma nova sessão.' });
   };
   
   if (status === 'loading') {
@@ -663,44 +659,57 @@ const CashGameManager: React.FC = () => {
       )
   }
 
-  if (status === 'error') {
+  if (status === 'error' || (status === 'success' && !game)) {
       return (
           <div className="flex h-screen items-center justify-center">
               <Card className="max-w-lg text-center">
                   <CardHeader>
-                      <CardTitle className="text-destructive">Erro ao Carregar o Jogo</CardTitle>
-                      <CardDescription>Não foi possível conectar ao banco de dados. Tente recarregar a página.</CardDescription>
+                      <CardTitle className="text-destructive">Erro ao Carregar a Sala</CardTitle>
+                      <CardDescription>
+                        {status === 'error' 
+                          ? 'Não foi possível conectar ao banco de dados. Tente recarregar a página.'
+                          : 'A sala que você está tentando acessar não foi encontrada. Verifique o ID e tente novamente.'
+                        }
+                      </CardDescription>
                   </CardHeader>
                   <CardContent>
-                      <pre className="bg-muted p-2 rounded-md text-xs text-left">{error?.message}</pre>
+                      {error && <pre className="bg-muted p-2 rounded-md text-xs text-left">{error?.message}</pre>}
+                       <Button asChild>
+                         <Link href="/cash-game">Voltar</Link>
+                       </Button>
                   </CardContent>
               </Card>
           </div>
       )
   }
 
-  if (status === 'success' && !game) {
-      // First time load, create the game document
-      createGame();
-      return null; // Will re-render once the game is created
+  const copyGameId = () => {
+    navigator.clipboard.writeText(gameId);
+    toast({ title: 'ID da Sala Copiado!', description: 'Você pode compartilhar este ID com seus amigos.' });
   }
-
 
   return (
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
-      {isDealing && <CardDealAnimation players={playersWithCards} onComplete={onDealingComplete} />}
+      {isDealing && <CardDealAnimation players={playersForAnimation} onComplete={onDealingComplete} />}
       <div className="mx-auto w-full max-w-7xl">
-        <div className="flex items-center gap-4 mb-8">
-          <Button asChild variant="outline" size="icon">
-            <Link href="/">
-              <ArrowLeft />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="font-headline text-3xl md:text-4xl font-bold text-accent">
-              Gerenciador de Cash Game
-            </h1>
-            <p className="text-muted-foreground">Controle as finanças e fichas da sua mesa.</p>
+        <div className="flex items-start justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <Button asChild variant="outline" size="icon">
+              <Link href="/cash-game">
+                <ArrowLeft />
+              </Link>
+            </Button>
+            <div>
+              <h1 className="font-headline text-3xl md:text-4xl font-bold text-accent">
+                {game?.name}
+              </h1>
+              <div className="flex items-center gap-2">
+                <p className="text-muted-foreground font-mono text-sm">ID da Sala: {gameId}</p>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
+                    <Copy className="h-4 w-4"/>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1451,7 +1460,7 @@ const CashGameManager: React.FC = () => {
                           <DialogHeader>
                             <DialogTitle>Confirmar Finalização</DialogTitle>
                             <DialogDescription>
-                              Tem certeza que deseja finalizar a sessão? Todos os jogadores e transações serão apagados
+                              Tem certeza que deseja finalizar a sessão? A sala e todos os seus dados serão apagados
                               permanentemente. Esta ação não pode ser desfeita.
                             </DialogDescription>
                           </DialogHeader>
@@ -1577,5 +1586,3 @@ const CashGameManager: React.FC = () => {
 };
 
 export default CashGameManager;
-
-    

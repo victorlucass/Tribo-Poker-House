@@ -6,6 +6,7 @@
             "type": "object",
             "properties": {
                 "id": { "type": "string", "description": "Unique identifier for the game session." },
+                "name": { "type": "string", "description": "The name of the game session/room." },
                 "chips": { "type": "array", "items": { "$ref": "#/entities/CashGameChip" } },
                 "players": { "type": "array", "items": { "$ref": "#/entities/CashGamePlayer" } },
                 "cashedOutPlayers": { "type": "array", "items": { "$ref": "#/entities/CashedOutPlayer" } },
@@ -13,7 +14,7 @@
                 "dealerId": { "type": ["number", "null"] },
                 "createdAt": { "type": "string", "format": "date-time" }
             },
-            "required": ["id", "chips", "players", "cashedOutPlayers", "positionsSet", "createdAt"]
+            "required": ["id", "name", "chips", "players", "cashedOutPlayers", "positionsSet", "createdAt"]
         },
         "CashGameChip": {
             "title": "Cash Game Chip",
@@ -93,7 +94,7 @@
         "providers": []
     },
     "firestore": {
-        "/cash-games/{gameId}": {
+        "/cashGames/{gameId}": {
             "schema": { "$ref": "#/entities/CashGame" },
             "description": "Stores the state of a single cash game session."
         }

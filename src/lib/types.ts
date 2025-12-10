@@ -65,6 +65,7 @@ export interface CashedOutPlayer {
 
 export interface CashGame {
     id: string;
+    name: string;
     chips: CashGameChip[];
     players: CashGamePlayer[];
     cashedOutPlayers: CashedOutPlayer[];
