@@ -84,14 +84,24 @@ export default {
           from: {
             height: 'var(--radix-accordion-content-height)',
           },
-          to: {
+to: {
             height: '0',
           },
+        },
+        'deal-card': {
+            '0%': { transform: 'translate(0, 0) scale(1)', opacity: '1' },
+            '100%': { transform: 'var(--transform-end)', opacity: '1' },
+        },
+        'flip-card': {
+            '0%': { transform: 'rotateY(180deg)' },
+            '100%': { transform: 'rotateY(0deg)' },
         },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        'deal-card': 'deal-card 0.5s ease-out forwards',
+        'flip-card': 'flip-card 0.5s ease-in-out forwards',
       },
     },
   },

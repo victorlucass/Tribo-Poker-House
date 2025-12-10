@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
+import type { CashGameChip as Chip, CashGamePlayer as Player, CashedOutPlayer, PlayerTransaction } from '@/lib/types';
 import {
   Card,
   CardContent,
@@ -43,43 +44,15 @@ import {
   CheckCircle2,
   LogOut,
   History,
+  Shuffle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Label } from './ui/label';
 import { Separator } from './ui/separator';
-
-interface Chip {
-  id: number;
-  value: number;
-  color: string;
-  name: string;
-}
-
-interface PlayerTransaction {
-    id: number;
-    type: 'buy-in' | 'rebuy' | 'add-on';
-    amount: number;
-    chips: { chipId: number; count: number }[];
-}
-
-interface Player {
-  id: number;
-  name: string;
-  transactions: PlayerTransaction[];
-  finalChipCounts?: Map<number, number>;
-}
-
-interface CashedOutPlayer {
-  id: number;
-  name: string;
-  transactions: PlayerTransaction[];
-  cashedOutAt: Date;
-  amountReceived: number;
-  chipCounts: Map<number, number>;
-  totalInvested: number;
-}
-
+import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
+import PokerTable from './poker-table';
+import CardDealAnimation from './card-deal-animation';
 
 const initialChips: Chip[] = [
   { id: 1, value: 0.25, color: '#22c55e', name: 'Verde' },
@@ -213,6 +186,12 @@ const CashGameManager: React.FC = () => {
   const [rebuyAmount, setRebuyAmount] = useState('');
   const [playerForDetails, setPlayerForDetails] = useState<Player | null>(null);
 
+  // Position sorting state
+  const [isDealing, setIsDealing] = useState(false);
+  const [dealerId, setDealerId] = useState<number | null>(null);
+  const [positionsSet, setPositionsSet] = useState(false);
+
+
   // Cash Out State
   const [isCashOutOpen, setIsCashOutOpen] = useState(false);
   const [playerToCashOut, setPlayerToCashOut] = useState<Player | null>(null);
@@ -234,6 +213,23 @@ const CashGameManager: React.FC = () => {
   const [rakeChipCounts, setRakeChipCounts] = useState<Map<number, number>>(new Map());
 
   const sortedChips = useMemo(() => [...chips].sort((a, b) => a.value - b.value), [chips]);
+
+  const handleStartDealing = () => {
+    if (players.length < 2) {
+      toast({ variant: 'destructive', title: 'Jogadores Insuficientes', description: 'Precisa de pelo menos 2 jogadores para sortear as posições.'});
+      return;
+    }
+    const { sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
+    setPlayers(sortedPlayers);
+    setDealerId(dealer.id);
+    setIsDealing(true);
+  };
+
+  const onDealingComplete = () => {
+    setIsDealing(false);
+    setPositionsSet(true);
+    toast({ title: 'Posições Definidas!', description: `O dealer é ${players.find(p => p.id === dealerId)?.name}.`});
+  };
 
   const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy') => {
     let amount: number;
@@ -569,11 +565,14 @@ const CashGameManager: React.FC = () => {
       setIsSettlementOpen(false);
       setCroupierTipsChipCounts(new Map());
       setRakeChipCounts(new Map());
+      setPositionsSet(false);
+      setDealerId(null);
       toast({ title: "Jogo Reiniciado!", description: "Tudo pronto para uma nova sessão."})
   }
 
   return (
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
+      {isDealing && <CardDealAnimation players={players} onComplete={onDealingComplete} />}
       <div className="mx-auto w-full max-w-7xl">
         <div className="flex items-center gap-4 mb-8">
           <Button asChild variant="outline" size="icon">
@@ -591,40 +590,55 @@ const CashGameManager: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserPlus /> Adicionar Jogador
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col md:flex-row gap-4">
-                  <Input
-                    placeholder="Nome do Jogador"
-                    value={newPlayerName}
-                    onChange={(e) => setNewPlayerName(e.target.value)}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Valor do Buy-in (R$)"
-                    value={newPlayerBuyIn}
-                    onChange={(e) => setNewPlayerBuyIn(e.target.value)}
-                  />
-                  <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto">
-                    <PlusCircle className="mr-2" />
-                    Adicionar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {!positionsSet && (
+                 <Card>
+                 <CardHeader>
+                   <CardTitle className="flex items-center gap-2">
+                     <UserPlus /> Adicionar Jogador
+                   </CardTitle>
+                 </CardHeader>
+                 <CardContent>
+                   <div className="flex flex-col md:flex-row gap-4">
+                     <Input
+                       placeholder="Nome do Jogador"
+                       value={newPlayerName}
+                       onChange={(e) => setNewPlayerName(e.target.value)}
+                       disabled={positionsSet}
+                     />
+                     <Input
+                       type="number"
+                       placeholder="Valor do Buy-in (R$)"
+                       value={newPlayerBuyIn}
+                       onChange={(e) => setNewPlayerBuyIn(e.target.value)}
+                       disabled={positionsSet}
+                     />
+                     <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto" disabled={positionsSet}>
+                       <PlusCircle className="mr-2" />
+                       Adicionar
+                     </Button>
+                   </div>
+                 </CardContent>
+               </Card>
+            )}
             
             <Dialog onOpenChange={(isOpen) => { if(!isOpen) {setPlayerForDetails(null); setRebuyAmount('')} }}>
               <Card>
-                <CardHeader>
-                  <CardTitle>Jogadores na Mesa</CardTitle>
-                  <CardDescription>Distribuição de fichas e ações para cada jogador ativo.</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Jogadores na Mesa</CardTitle>
+                    <CardDescription>Distribuição de fichas e ações para cada jogador ativo.</CardDescription>
+                  </div>
+                  {!positionsSet && players.length > 1 && (
+                    <Button onClick={handleStartDealing} variant="secondary">
+                      <Shuffle className="mr-2 h-4 w-4" />
+                      Sortear Posições
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent>
+                 {positionsSet ? (
+                   <PokerTable players={players} dealerId={dealerId} />
+                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -678,7 +692,7 @@ const CashGameManager: React.FC = () => {
                                     </Button>
                                     <Dialog>
                                       <DialogTrigger asChild>
-                                          <Button variant="ghost" size="icon">
+                                          <Button variant="ghost" size="icon" disabled={positionsSet}>
                                             <Trash2 className="h-4 w-4 text-red-500" />
                                           </Button>
                                       </DialogTrigger>
@@ -703,7 +717,7 @@ const CashGameManager: React.FC = () => {
                           })
                         )}
                       </TableBody>
-                      {players.length > 0 && (
+                      {players.length > 0 && !positionsSet && (
                         <UiTableFooter>
                            <TableRow className="bg-muted/50 hover:bg-muted font-bold">
                             <TableCell colSpan={2} className="text-right">
@@ -733,6 +747,7 @@ const CashGameManager: React.FC = () => {
                       )}
                     </Table>
                   </div>
+                 )}
                 </CardContent>
               </Card>
 

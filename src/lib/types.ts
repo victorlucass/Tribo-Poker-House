@@ -18,6 +18,16 @@ export interface RoundWinner {
   winnerName: string;
 }
 
+// Tipos para Card
+export type Suit = 'spades' | 'hearts' | 'diamonds' | 'clubs';
+export type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'A';
+
+export interface Card {
+  suit: Suit;
+  rank: Rank;
+}
+
+
 // Tipos para Cash Game
 export interface CashGameChip {
     id: number;
@@ -29,7 +39,27 @@ export interface CashGameChip {
 export interface CashGamePlayer {
     id: number;
     name: string;
-    buyIn: number; // Valor total de buy-in do jogador
-    chipCount: { chipId: number; count: number }[]; // A contagem de fichas que o jogador possui
-    finalCashOut?: number; // Valor final ao sair da mesa
+    transactions: PlayerTransaction[];
+    finalChipCounts?: Map<number, number>;
+    seat?: number; // Posição na mesa
+    card?: Card; // Carta recebida no sorteio
+}
+
+
+export interface PlayerTransaction {
+    id: number;
+    type: 'buy-in' | 'rebuy' | 'add-on';
+    amount: number;
+    chips: { chipId: number; count: number }[];
+}
+
+
+export interface CashedOutPlayer {
+  id: number;
+  name: string;
+  transactions: PlayerTransaction[];
+  cashedOutAt: Date;
+  amountReceived: number;
+  chipCounts: Map<number, number>;
+  totalInvested: number;
 }
