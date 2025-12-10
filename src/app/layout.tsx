@@ -4,8 +4,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'Texas Hold\'em Timer',
-  description: 'Gerencie seus torneios de poker Texas Hold\'em com facilidade.',
+  title: 'Tribo Poker House',
+  description: 'Gerencie seus torneios e cash games de poker com facilidade.',
 };
 
 export default function RootLayout({

@@ -8,7 +8,7 @@ export default function Home() {
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="text-center mb-12">
         <h1 className="font-headline text-5xl font-bold text-accent">
-          Poker Timer & Manager
+          Tribo Poker House
         </h1>
         <p className="text-muted-foreground mt-2 text-lg">
           Sua ferramenta completa para noites de poker.

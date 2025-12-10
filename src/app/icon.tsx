@@ -18,17 +18,29 @@ export default function Icon() {
       <div
         style={{
           fontSize: 24,
-          background: 'black',
+          background: 'hsl(13, 14%, 12%)',
           width: '100%',
           height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: 'white',
-          borderRadius: '50%',
+          borderRadius: '4px',
         }}
       >
-        ♠
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="white"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="m12 2 10 10-10 10-10-10Z"/>
+        </svg>
       </div>
     ),
     // ImageResponse options
