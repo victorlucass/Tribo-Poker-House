@@ -52,6 +52,10 @@ export default function CashGameLandingPage() {
       toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para criar uma sala.' });
       return;
     }
+    if (!isAdmin) {
+      toast({ variant: 'destructive', title: 'Acesso Negado', description: 'Apenas administradores podem criar salas.' });
+      return;
+    }
     setIsCreating(true);
 
     try {
@@ -162,22 +166,24 @@ export default function CashGameLandingPage() {
         </Button>
       </div>
       <div className="w-full max-w-md space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-accent">
-              <PlusCircle /> Criar Nova Sala
-            </CardTitle>
-            <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Input placeholder="Nome da Sala (Ex: Jogo de Terça)" value={newGameName} onChange={(e) => setNewGameName(e.target.value)} disabled={isCreating} />
-          </CardContent>
-          <CardFooter>
-            <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
-              {isCreating ? 'Criando...' : 'Criar Sala'}
-            </Button>
-          </CardFooter>
-        </Card>
+        {isAdmin && (
+            <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-accent">
+                <PlusCircle /> Criar Nova Sala
+                </CardTitle>
+                <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Input placeholder="Nome da Sala (Ex: Jogo de Terça)" value={newGameName} onChange={(e) => setNewGameName(e.target.value)} disabled={isCreating} />
+            </CardContent>
+            <CardFooter>
+                <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
+                {isCreating ? 'Criando...' : 'Criar Sala'}
+                </Button>
+            </CardFooter>
+            </Card>
+        )}
 
         <Card>
           <CardHeader>

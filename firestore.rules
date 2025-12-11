@@ -68,15 +68,15 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
 
-      // Only authenticated users can create a new cash game
-      // The ownerId in the document must match the creator's UID
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      // Only authenticated users with an 'admin' role can create a new cash game.
+      // The ownerId in the document must also match the creator's UID.
+      allow create: if isSignedIn() && isAdmin() && request.resource.data.ownerId == request.auth.uid;
       
       // Only the owner or an admin can update the game state
       allow update: if isSignedIn() && (isOwner(resource.data.ownerId) || isAdmin());
       
-      // Only the owner can delete the game
-      allow delete: if isSignedIn() && isOwner(resource.data.ownerId);
+      // Only the owner or an admin can delete the game
+      allow delete: if isSignedIn() && (isOwner(resource.data.ownerId) || isAdmin());
     }
 
     match /tournaments/{tournamentId} {
