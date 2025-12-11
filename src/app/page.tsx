@@ -24,18 +24,18 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <div className="absolute top-8 right-8 flex gap-4">
+      <div className="absolute top-4 right-4 flex flex-col items-end gap-2 sm:flex-row sm:top-8 sm:right-8">
         {isSuperAdmin && (
-          <Button asChild variant="secondary">
+          <Button asChild variant="secondary" size="sm">
             <Link href="/admin">
-              <ShieldCheck className="mr-2 h-4 w-4" />
-              Admin
+              <ShieldCheck className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Admin</span>
             </Link>
           </Button>
         )}
-        <Button variant="outline" onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          Sair
+        <Button variant="outline" size="sm" onClick={handleLogout}>
+          <LogOut className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Sair</span>
         </Button>
       </div>
       <div className="text-center mb-12">

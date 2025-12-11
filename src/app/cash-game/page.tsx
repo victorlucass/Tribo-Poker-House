@@ -152,17 +152,17 @@ export default function CashGameLandingPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="absolute top-8 left-8">
+       <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <Button asChild variant="outline" size="icon">
           <Link href="/">
             <ArrowLeft />
           </Link>
         </Button>
       </div>
-      <div className="absolute top-8 right-8">
-        <Button variant="outline" onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          Sair
+      <div className="absolute top-4 right-4 sm:top-8 sm:right-8">
+        <Button variant="outline" onClick={handleLogout} size="sm">
+          <LogOut className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Sair</span>
         </Button>
       </div>
       <div className="w-full max-w-md space-y-8">
