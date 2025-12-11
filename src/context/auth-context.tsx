@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useUser as useFirebaseUser, useFirestore, useAuth as useFirebaseAuth } from '@/firebase';
 import type { UserProfile } from '@/lib/types';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,35 +42,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   const handleLogout = useCallback(() => {
-    if (!auth) return;
     signOut(auth).then(() => {
       setUserProfile(null);
-      // No need to push, useEffect will handle it.
+      router.push('/login'); // Force redirect after state is cleared
       toast({ title: 'Logout efetuado com sucesso.' });
     });
-  }, [auth, toast]);
+  }, [auth, toast, router]);
 
   useEffect(() => {
     const isPublicPath = ['/login', '/signup'].includes(pathname);
 
-    // If we're still waiting for Firebase Auth to initialize, show loader.
     if (isUserLoading) {
       setLoading(true);
       return;
     }
 
-    // Firebase is initialized. If there's no user, redirect to login if not on a public path.
     if (!firebaseUser) {
       setUserProfile(null);
       if (!isPublicPath) {
         router.push('/login');
       } else {
-        setLoading(false); // On public path, stop loading.
+        setLoading(false);
       }
       return;
     }
     
-    // There is a Firebase user.
     if (firestore) {
       const userDocRef = doc(firestore, 'users', firebaseUser.uid);
       getDoc(userDocRef)
@@ -79,29 +75,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUserProfile(docSnap.data() as UserProfile);
             if (isPublicPath) {
               router.push('/');
-            } else {
-              setLoading(false);
             }
+            setLoading(false);
           } else {
             // Profile doesn't exist, so let's create it.
             // This handles the race condition during signup.
+            let name = firebaseUser.displayName || 'Novo Usuário';
+            let nickname = firebaseUser.email?.split('@')[0] || `user_${firebaseUser.uid.substring(0, 5)}`;
+            
+            try {
+                const pendingProfile = sessionStorage.getItem('pendingUserProfile');
+                if(pendingProfile) {
+                    const profileData = JSON.parse(pendingProfile);
+                    name = profileData.name;
+                    nickname = profileData.nickname;
+                    sessionStorage.removeItem('pendingUserProfile'); // Clean up
+                }
+            } catch (e) {
+                console.error("Could not parse sessionStorage data:", e);
+            }
+
             const isSuperAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL === firebaseUser.email;
             const role = isSuperAdmin ? 'super_admin' : 'player';
 
-            // Nickname is not available directly on user creation with email/password.
-            // We'll need to retrieve it from the signup form.
-            // For now, let's use a placeholder or derive from email.
-            const derivedNickname = firebaseUser.email?.split('@')[0] || `user_${firebaseUser.uid.substring(0, 5)}`;
-
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
-              name: firebaseUser.displayName || 'Novo Usuário',
-              nickname: derivedNickname,
+              name: name,
+              nickname: nickname,
               email: firebaseUser.email!,
               role: role,
             };
             
-            // Use a non-blocking write to avoid getting stuck here
             setDocumentNonBlocking(userDocRef, newProfile, {});
             setUserProfile(newProfile); // Optimistically set the profile
 
@@ -109,9 +113,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             
             if (isPublicPath) {
                 router.push('/');
-            } else {
-                setLoading(false);
             }
+            setLoading(false);
           }
         })
         .catch((error) => {

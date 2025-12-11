@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { updateProfile } from 'firebase/auth';
-import { useAuth as useFirebaseAuth, useUser } from '@/firebase';
+import { useAuth as useFirebaseAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +14,6 @@ import { initiateEmailSignUp } from '@/firebase/non-blocking-login';
 export default function SignupPage() {
   const router = useRouter();
   const auth = useFirebaseAuth();
-  const { user: firebaseUser, isUserLoading } = useUser();
   const { toast } = useToast();
   
   const [name, setName] = useState('');
@@ -23,28 +21,6 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
-  const [signupInitiated, setSignupInitiated] = useState(false);
-
-  // This effect runs when the firebaseUser object changes after signup.
-  useEffect(() => {
-    // If signup was initiated and we have a user, update their Auth profile.
-    // The AuthProvider will handle creating the Firestore document.
-    if (signupInitiated && firebaseUser && !isUserLoading) {
-      updateProfile(firebaseUser, { displayName: name })
-        .then(() => {
-            toast({ title: 'Cadastro realizado!', description: 'Bem-vindo! Redirecionando...' });
-            // The AuthProvider will handle redirection.
-        })
-        .catch((error) => {
-            toast({ variant: 'destructive', title: 'Erro ao Salvar Perfil', description: 'Não foi possível salvar seu nome de usuário.' });
-        })
-        .finally(() => {
-            setIsSigningUp(false);
-            setSignupInitiated(false);
-        });
-    }
-  }, [firebaseUser, isUserLoading, signupInitiated, name, router, toast]);
-
 
   const handleSignup = () => {
     if (!name || !nickname || !email || !password) {
@@ -59,25 +35,19 @@ export default function SignupPage() {
       setIsSigningUp(false);
       return;
     }
-
+    
+    // Store profile data temporarily for AuthProvider to pick it up
     try {
-        setSignupInitiated(true);
-        // This will trigger the onAuthStateChanged listener in AuthProvider
-        initiateEmailSignUp(auth, email, password);
-    } catch (error: any) {
-        setSignupInitiated(false);
-        setIsSigningUp(false);
-        console.error(error);
-        let description = 'Ocorreu um erro desconhecido.';
-        if (error.code === 'auth/email-already-in-use') {
-            description = 'Este e-mail já está registrado. Tente fazer login ou use outro e-mail.';
-        } else if (error.code === 'auth/weak-password') {
-            description = 'A senha é muito fraca. Tente uma com pelo menos 6 caracteres.';
-        } else if (error.code === 'auth/invalid-email') {
-            description = 'O e-mail fornecido não é válido.';
-        }
-        toast({ variant: 'destructive', title: 'Falha no Cadastro', description });
+      sessionStorage.setItem('pendingUserProfile', JSON.stringify({ name, nickname }));
+    } catch (e) {
+      console.error("Could not set sessionStorage:", e);
+      toast({ variant: 'destructive', title: 'Erro de Navegador', description: 'Não foi possível salvar os dados do perfil temporariamente. Verifique as configurações do seu navegador.' });
+      setIsSigningUp(false);
+      return;
     }
+
+    initiateEmailSignUp(auth, email, password);
+    // The AuthProvider will handle profile creation and redirection.
   };
 
   return (
@@ -113,10 +83,11 @@ export default function SignupPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={isSigningUp}
+            onKeyDown={(e) => e.key === 'Enter' && handleSignup()}
           />
         </CardContent>
         <CardFooter className="flex-col gap-4">
-          <Button className="w-full" onClick={handleSignup} disabled={isSigningUp || isUserLoading}>
+          <Button className="w-full" onClick={handleSignup} disabled={isSigningUp}>
             {isSigningUp ? 'Criando...' : 'Criar Conta'}
           </Button>
            <Button variant="link" asChild>
