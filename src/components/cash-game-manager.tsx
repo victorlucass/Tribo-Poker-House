@@ -64,7 +64,8 @@ import { useDoc, useFirestore } from '@/firebase';
 import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -195,21 +196,16 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const updateGame = useCallback(
     (data: Partial<CashGame>) => {
       if (!gameRef) return;
-      updateDoc(gameRef, data).catch((e) => {
-        console.error('Failed to update game:', e);
+      updateDoc(gameRef, data).catch((serverError) => {
         const permissionError = new FirestorePermissionError({
           path: gameRef.path,
           operation: 'update',
           requestResourceData: data,
-        });
-        toast({
-          variant: 'destructive',
-          title: 'Erro de Sincronização',
-          description: permissionError.message || 'Não foi possível salvar as alterações.',
-        });
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
       });
     },
-    [gameRef, toast]
+    [gameRef]
   );
   
   const chips = game?.chips ?? [];
@@ -1599,3 +1595,5 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 };
 
 export default CashGameManager;
+
+    

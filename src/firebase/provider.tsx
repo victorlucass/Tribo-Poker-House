@@ -4,7 +4,42 @@ import * as React from "react";
 import type { FirebaseApp } from "firebase/app";
 import type { Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
-import { useUser } from "./auth/use-user";
+import { useToast } from "@/hooks/use-toast";
+import { errorEmitter } from "./error-emitter";
+import { FirestorePermissionError } from "./errors";
+
+// This is a global listener for Firestore permission errors.
+// It is used to display a toast message when a permission error occurs.
+const FirebaseErrorListener = () => {
+    const { toast } = useToast();
+    React.useEffect(() => {
+        const unsubscribe = errorEmitter.on('permission-error', (error: FirestorePermissionError) => {
+            console.error("Firestore Permission Error caught by global listener:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Erro de Permissão do Firestore',
+                description: (
+                    <div className="mt-2 w-full">
+                        <p className="text-xs">{error.message}</p>
+                        <pre className="mt-2 w-full rounded-md bg-slate-950 p-2">
+                            <code className="text-white text-xs">
+                                {JSON.stringify(error.context, null, 2)}
+                            </code>
+                        </pre>
+                    </div>
+                ),
+                duration: 20000,
+            })
+        });
+
+        return () => {
+            errorEmitter.off('permission-error', unsubscribe);
+        }
+    }, [toast]);
+
+    return null;
+}
+
 
 type FirebaseContextValue = {
   app: FirebaseApp;
@@ -27,11 +62,10 @@ export function FirebaseProvider({
   auth,
   firestore,
 }: FirebaseProviderProps) {
-  // NOTE: This is a very basic implementation of a Firebase provider.
-  // You can add more features like authentication, etc.
   return (
     <FirebaseContext.Provider value={{ app, auth, firestore }}>
       {children}
+      <FirebaseErrorListener />
     </FirebaseContext.Provider>
   );
 }
@@ -67,3 +101,5 @@ export function useFirestore() {
   }
   return context.firestore;
 }
+
+    
