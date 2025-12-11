@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -11,11 +11,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { useAuth } from '@/context/auth-context';
 
 export default function DealerPage() {
   const params = useParams();
   const gameId = params.id as string;
   const router = useRouter();
+  const { user } = useAuth();
 
   const firestore = useFirestore();
 
@@ -26,10 +28,21 @@ export default function DealerPage() {
 
   const { data: game, status } = useDoc<CashGame>(gameRef);
 
+  const [showCommunityCardAnimation, setShowCommunityCardAnimation] = useState(false);
+
+  // Monitor phase changes to trigger animations
+  useEffect(() => {
+    if (game?.handState?.phase === 'FLOP' || game?.handState?.phase === 'TURN' || game?.handState?.phase === 'RIVER') {
+      setShowCommunityCardAnimation(true);
+      const timer = setTimeout(() => setShowCommunityCardAnimation(false), 1000); // Animation duration
+      return () => clearTimeout(timer);
+    }
+  }, [game?.handState?.phase]);
+
+
   const updateHandState = useCallback(
     (handState: Partial<HandState> | null) => {
       if (!gameRef) return;
-      // Use null to delete the field
       const dataToUpdate = handState === null ? { handState: null } : { handState };
       updateDocumentNonBlocking(gameRef, dataToUpdate);
     },
@@ -66,6 +79,28 @@ export default function DealerPage() {
           <CardContent>
             <Button asChild>
               <Link href="/cash-game">Voltar</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // Apenas o dono da sala ou o dealer podem acessar
+  const isOwner = game.ownerId === user?.uid;
+  if (!isOwner) {
+    return (
+       <div className="flex h-screen items-center justify-center">
+        <Card className="max-w-lg text-center">
+          <CardHeader>
+            <CardTitle>Acesso Negado</CardTitle>
+            <CardDescription>
+             Apenas o dono da sala pode acessar o modo Croupier.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+                <Link href={`/cash-game/${gameId}`}>Voltar para Sala</Link>
             </Button>
           </CardContent>
         </Card>
@@ -117,6 +152,7 @@ export default function DealerPage() {
             smallBlindPlayerId={game.handState?.smallBlindPlayerId}
             bigBlindPlayerId={game.handState?.bigBlindPlayerId}
             onSetDealer={(playerId) => updateGame({ dealerId: playerId })}
+            showCommunityCardAnimation={showCommunityCardAnimation}
           />
         </div>
         <div className="w-full shrink-0">

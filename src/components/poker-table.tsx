@@ -3,7 +3,7 @@
 import React from 'react';
 import type { PlayerHandState, Card, Suit, Rank } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { User, Dices } from 'lucide-react';
+import { User, Dices, Flame } from 'lucide-react';
 
 interface PokerTableProps {
   players: PlayerHandState[];
@@ -14,6 +14,7 @@ interface PokerTableProps {
   smallBlindPlayerId?: string | null;
   bigBlindPlayerId?: string | null;
   onSetDealer?: (playerId: string) => void;
+  showCommunityCardAnimation?: boolean;
 }
 
 const suitSymbols: Record<Suit, string> = {
@@ -30,14 +31,21 @@ const suitColors: Record<Suit, string> = {
   clubs: 'text-green-500',
 };
 
-const CardComponent: React.FC<{ card: Card, isFaceDown?: boolean }> = ({ card, isFaceDown }) => (
-    <div className="w-12 h-16 md:w-16 md:h-24 bg-white rounded-md flex flex-col justify-between p-1 border-2 border-gray-300 shadow-md">
-        {isFaceDown ? (
-             <div className="w-full h-full rounded-md bg-primary flex items-center justify-center">
-                 <Dices className="text-primary-foreground opacity-50" />
+const CardComponent: React.FC<{ card: Card, isFaceDown?: boolean, isAnimating?: boolean }> = ({ card, isFaceDown, isAnimating }) => (
+    <div className={cn(
+        "w-12 h-16 md:w-16 md:h-24 rounded-md shadow-md perspective-1000",
+        isAnimating && "transform-style-3d",
+        isAnimating && isFaceDown && "animate-flip-y"
+    )}>
+        <div className={cn("relative w-full h-full transform-style-3d", {"animate-flip-y": isAnimating && !isFaceDown})}>
+            {/* Back of the card */}
+            <div className="absolute w-full h-full backface-hidden bg-primary rounded-lg border-2 border-red-800 flex items-center justify-center">
+                 <div className="w-4/5 h-4/5 rounded-md border-2 border-red-300/50 flex items-center justify-center">
+                     <Dices className="text-primary-foreground opacity-50" />
+                 </div>
             </div>
-        ) : (
-            <>
+            {/* Front of the card */}
+            <div className={cn("absolute w-full h-full backface-hidden transform rotate-y-180 bg-white flex flex-col justify-between p-1 border-2 border-gray-300 rounded-md")}>
                 <div className="flex flex-col items-start leading-none">
                     <span className={cn("font-bold text-lg", suitColors[card.suit])}>{card.rank}</span>
                     <span className={cn("text-base", suitColors[card.suit])}>{suitSymbols[card.suit]}</span>
@@ -49,8 +57,8 @@ const CardComponent: React.FC<{ card: Card, isFaceDown?: boolean }> = ({ card, i
                     <span className={cn("font-bold text-lg", suitColors[card.suit])}>{card.rank}</span>
                     <span className={cn("text-base", suitColors[card.suit])}>{suitSymbols[card.suit]}</span>
                 </div>
-            </>
-        )}
+            </div>
+        </div>
     </div>
 );
 
@@ -63,10 +71,10 @@ const PokerTable: React.FC<PokerTableProps> = ({
     pot = 0,
     smallBlindPlayerId,
     bigBlindPlayerId,
-    onSetDealer
+    onSetDealer,
+    showCommunityCardAnimation = false,
 }) => {
   const getSeatPosition = (index: number, totalPlayers: number) => {
-    // Starts from top and goes clockwise
     const angle = -Math.PI / 2 + (index / totalPlayers) * 2 * Math.PI;
     const radiusX = 45; // percentage
     const radiusY = 38; // percentage
@@ -89,11 +97,12 @@ const PokerTable: React.FC<PokerTableProps> = ({
       {/* Community Cards and Pot */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center gap-4">
             <div className="flex items-center justify-center gap-2">
-                {Array(5).fill(null).map((_, index) => (
-                    communityCards[index]
-                        ? <CardComponent key={index} card={communityCards[index]} />
+                {Array(5).fill(null).map((_, index) => {
+                    const card = communityCards[index];
+                    return card
+                        ? <CardComponent key={index} card={card} isAnimating={showCommunityCardAnimation} />
                         : <div key={index} className="w-12 h-16 md:w-16 md:h-24 bg-green-900/50 rounded-md border-2 border-dashed border-green-400/30" />
-                ))}
+                })}
             </div>
             {pot > 0 && (
                 <div className="bg-black/50 text-white py-1 px-4 rounded-full text-lg font-bold">
@@ -126,7 +135,7 @@ const PokerTable: React.FC<PokerTableProps> = ({
             
             <div
               className={cn(
-                "w-24 h-24 rounded-full bg-card border-2 border-primary/50 flex flex-col items-center justify-center p-1 text-center shadow-lg transition-all duration-300",
+                "relative w-24 h-24 rounded-full bg-card border-2 border-primary/50 flex flex-col items-center justify-center p-1 text-center shadow-lg transition-all duration-300",
                 isActive && "ring-4 ring-primary shadow-primary/50 scale-110",
                 player.isFolded && "opacity-40",
                 onSetDealer && "cursor-pointer hover:border-accent"
@@ -140,6 +149,11 @@ const PokerTable: React.FC<PokerTableProps> = ({
               <span className="text-xs font-mono text-muted-foreground">
                 {player.stack.toLocaleString('pt-BR')}
               </span>
+               {player.isAllIn && (
+                  <div className="absolute -top-2 -right-2 bg-red-800 text-white rounded-full p-1 border-2 border-background">
+                    <Flame className="h-4 w-4" />
+                  </div>
+              )}
             </div>
 
              {/* Player Cards */}

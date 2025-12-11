@@ -39,18 +39,17 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
 
       // Update Rules:
-      // - Any signed-in user can update 'requests' to join.
+      // - The game owner or an admin can update anything (including designating the dealer).
       // - The designated dealer can update the 'handState'.
-      // - The game owner or an admin can update anything else (including dealerId).
+      // - Any signed-in user can update 'requests' to join.
       allow update: if isSignedIn() && 
                     (
-                      // Allow anyone to request to join
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) ||
-                      // Allow the dealer to update the hand state
-                      (request.auth.uid == resource.data.dealerId && 
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handState'])) ||
                       // Allow owner or admin to manage the game fully
-                      (resource.data.ownerId == request.auth.uid || isAdmin())
+                      (resource.data.ownerId == request.auth.uid || isAdmin()) ||
+                      // Allow the dealer to update the hand state
+                      (request.auth.uid == resource.data.ownerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handState'])) ||
+                       // Allow anyone to request to join
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']))
                     );
     }
 

@@ -47,6 +47,7 @@ export interface HandState {
     phase: GamePhase;
     pot: number;
     communityCards: Card[];
+    deck?: Card[]; // Keep track of the deck to deal cards
     activePlayerId: string | null;
     lastRaise: number;
     smallBlindAmount: number;

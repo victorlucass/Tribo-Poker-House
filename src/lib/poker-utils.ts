@@ -1,4 +1,4 @@
-import type { Card, Rank, Suit, CashGamePlayer as Player, HandState, PlayerHandState, GamePhase } from './types';
+import type { Card, Rank, Suit, CashGamePlayer, HandState, PlayerHandState, GamePhase } from './types';
 
 const SUITS: Suit[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -40,77 +40,188 @@ const compareCards = (a: Card, b: Card): number => {
   return SUIT_VALUES[b.suit] - SUIT_VALUES[a.suit]; // Higher suit as tie-breaker
 };
 
-export const sortPlayersAndSetDealer = (players: Player[]): { playersWithDealtCards: Player[], sortedPlayers: Player[], dealer: Player } => {
+export const sortPlayersAndSetDealer = (players: CashGamePlayer[]): { playersWithDealtCards: CashGamePlayer[], sortedPlayers: CashGamePlayer[], dealer: CashGamePlayer } => {
   if (players.length < 2) {
     throw new Error("Cannot sort positions with fewer than 2 players.");
   }
 
   const deck = shuffleDeck(createDeck());
   
-  // Deal one card to each player (in original registration order)
   const playersWithDealtCards = players.map((player, index) => ({
     ...player,
     card: deck[index],
   }));
 
-  // Create a separate array for sorting to find the dealer
   const playersToSort = [...playersWithDealtCards];
 
-  // Find the player with the highest card
   const highestCardPlayer = playersToSort.sort((a, b) => compareCards(a.card!, b.card!))[0];
   
   const dealerIndex = playersWithDealtCards.findIndex(p => p.id === highestCardPlayer.id);
 
-  // Set seat numbers starting from the dealer
-  const sortedPlayers: Player[] = [];
+  const sortedPlayers: CashGamePlayer[] = [];
   for (let i = 0; i < playersWithDealtCards.length; i++) {
     const currentPlayerIndex = (dealerIndex + i) % playersWithDealtCards.length;
     sortedPlayers.push({
       ...playersWithDealtCards[currentPlayerIndex],
-      seat: i + 1, // Dealer is seat 1
+      seat: i + 1,
     });
   }
   
-  // Final array sorted by the new seat number
   sortedPlayers.sort((a, b) => a.seat! - b.seat!);
 
   return { playersWithDealtCards, sortedPlayers, dealer: highestCardPlayer };
 };
 
-
-// --- New Hand Management Logic ---
-
 export function getNextPlayer(players: PlayerHandState[], currentActivePlayerId: string | null): PlayerHandState | null {
     const activePlayers = players.filter(p => !p.isFolded && !p.isAllIn);
-    if (activePlayers.length === 0) return null;
+    if (activePlayers.length <= 1) return null; // No next player if only one or zero left
 
     const currentIndex = currentActivePlayerId ? activePlayers.findIndex(p => p.id === currentActivePlayerId) : -1;
+    // If current player isn't found (e.g. they folded), start from the beginning
     const nextIndex = (currentIndex + 1) % activePlayers.length;
     
-    return activePlayers[nextIndex];
+    const nextPlayer = activePlayers[nextIndex];
+
+    // Check if everyone has acted (or is all-in)
+    const allActed = activePlayers.every(p => p.hasActed || p.isAllIn);
+    if (allActed) {
+        // And check if all bets are equal
+        const highestBet = Math.max(...activePlayers.map(p => p.bet));
+        const allBetsEqual = activePlayers.every(p => p.bet === highestBet || p.isAllIn);
+        if (allBetsEqual) {
+            return null; // End of betting round
+        }
+    }
+    
+    return nextPlayer;
 }
 
-export function startNewHand(players: Player[], currentDealerId: string, smallBlind: number, bigBlind: number): { handState: HandState, nextDealerId: string } {
+
+export function checkEndOfBettingRound(players: PlayerHandState[], lastRaise: number): boolean {
+    const activePlayers = players.filter(p => !p.isFolded && !p.isAllIn);
+    if (activePlayers.length === 0) return true;
+
+    // Everyone has had a chance to act
+    const allHaveActed = activePlayers.every(p => p.hasActed);
+    if (!allHaveActed) return false;
+    
+    const highestBet = Math.max(...players.map(p => p.bet));
+    const allBetsEqual = activePlayers.every(p => p.bet === highestBet);
+
+    return allBetsEqual;
+}
+
+export function collectBets(handState: HandState): HandState {
+    let newPot = handState.pot;
+    const newPlayers = handState.players.map(p => {
+        newPot += p.bet;
+        return { ...p, bet: 0, hasActed: false };
+    });
+    return { ...handState, pot: newPot, players: newPlayers, lastRaise: 0 };
+}
+
+
+export function awardPotToWinner(handState: HandState, gamePlayers: CashGamePlayer[], winnerId?: string): CashGamePlayer[] {
+    let winner: PlayerHandState | undefined;
+
+    if (winnerId) {
+        winner = handState.players.find(p => p.id === winnerId);
+    } else {
+       // TODO: Implement hand evaluation logic to find the real winner at showdown
+       // For now, let's find the last player who hasn't folded.
+       const potentialWinners = handState.players.filter(p => !p.isFolded);
+       if (potentialWinners.length === 1) {
+           winner = potentialWinners[0];
+       } else {
+           // Fallback if there's no clear winner (e.g. showdown)
+           winner = potentialWinners[0];
+       }
+    }
+
+    if (!winner) return gamePlayers; // No winner found, return original players
+
+    // Calculate total pot from player bets and the main pot
+    const totalPot = handState.pot + handState.players.reduce((sum, p) => sum + p.bet, 0);
+
+    const updatedGamePlayers = gamePlayers.map(gp => {
+        if (gp.id === winner!.id) {
+            const playerTransaction = gp.transactions.find(t => t.type === 'buy-in' || t.type === 'rebuy');
+            if (playerTransaction) {
+                 const newTransaction: PlayerTransaction = {
+                    id: gp.transactions.length + 1,
+                    type: 'rebuy', // Treat winnings as a rebuy for stack tracking
+                    amount: totalPot,
+                    chips: [], // We don't know the chip breakdown of the pot
+                };
+                // This is a simplified way to update the stack.
+                // A more robust solution might need to update a `stack` field directly.
+                // For now we add a transaction representing the win.
+                const updatedTransactions = [...gp.transactions, newTransaction];
+                return { ...gp, transactions: updatedTransactions };
+            }
+        }
+        return gp;
+    });
+
+    return updatedGamePlayers;
+}
+
+
+export function advanceHandPhase(handState: HandState): HandState {
+    const deck = handState.deck || shuffleDeck(createDeck());
+    const newCommunityCards = [...handState.communityCards];
+
+    let nextPhase: GamePhase = handState.phase;
+
+    if (handState.phase === 'PRE_FLOP') {
+        nextPhase = 'FLOP';
+        deck.pop(); // Burn card
+        newCommunityCards.push(deck.pop()!, deck.pop()!, deck.pop()!);
+    } else if (handState.phase === 'FLOP') {
+        nextPhase = 'TURN';
+        deck.pop(); // Burn card
+        newCommunityCards.push(deck.pop()!);
+    } else if (handState.phase === 'TURN') {
+        nextPhase = 'RIVER';
+        deck.pop(); // Burn card
+        newCommunityCards.push(deck.pop()!);
+    } else if (handState.phase === 'RIVER') {
+        nextPhase = 'SHOWDOWN';
+    }
+
+    const firstToAct = getNextPlayer(handState.players, handState.smallBlindPlayerId);
+
+    return {
+        ...handState,
+        phase: nextPhase,
+        communityCards: newCommunityCards,
+        deck: deck,
+        activePlayerId: firstToAct ? firstToAct.id : null,
+        players: handState.players.map(p => ({...p, hasActed: false})), // Reset hasActed for new round
+    };
+}
+
+
+export function startNewHand(players: CashGamePlayer[], currentDealerId: string, smallBlind: number, bigBlind: number): { handState: HandState, nextDealerId: string } {
     const deck = shuffleDeck(createDeck());
     const sortedPlayers = [...players].sort((a, b) => a.seat! - b.seat!);
     
-    // Determine the next dealer
     const currentDealerIndex = sortedPlayers.findIndex(p => p.id === currentDealerId);
     const nextDealerIndex = (currentDealerIndex + 1) % sortedPlayers.length;
     const nextDealer = sortedPlayers[nextDealerIndex];
     
-    // Determine blinds based on the new dealer
-    const smallBlindIndex = (nextDealerIndex + 1) % sortedPlayers.length;
-    const bigBlindIndex = (nextDealerIndex + 2) % sortedPlayers.length;
+    // Handle heads-up (2 players) blinds differently
+    const isHeadsUp = sortedPlayers.length === 2;
+    const smallBlindIndex = isHeadsUp ? nextDealerIndex : (nextDealerIndex + 1) % sortedPlayers.length;
+    const bigBlindIndex = (smallBlindIndex + 1) % sortedPlayers.length;
+
     const smallBlindPlayer = sortedPlayers[smallBlindIndex];
     const bigBlindPlayer = sortedPlayers[bigBlindIndex];
     
-    // Determine who acts first (UTG)
-    const firstToActIndex = (bigBlindIndex + 1) % sortedPlayers.length;
+    const firstToActIndex = isHeadsUp ? smallBlindIndex : (bigBlindIndex + 1) % sortedPlayers.length;
     const firstToActPlayer = sortedPlayers[firstToActIndex];
 
-    // Get player's total investment to determine their stack for the hand
-    const getPlayerStack = (player: Player): number => {
+    const getPlayerStack = (player: CashGamePlayer): number => {
         return player.transactions.reduce((acc, t) => acc + t.amount, 0);
     }
 
@@ -138,6 +249,7 @@ export function startNewHand(players: Player[], currentDealerId: string, smallBl
         phase: 'PRE_FLOP',
         pot: playerHandStates.reduce((acc, p) => acc + p.bet, 0),
         communityCards: [],
+        deck: deck,
         activePlayerId: firstToActPlayer.id,
         lastRaise: bigBlind,
         smallBlindAmount: smallBlind,
