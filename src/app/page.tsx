@@ -32,7 +32,7 @@ export default function Home() {
       </div>
       <div className="text-center mb-12">
         <h1 className="font-headline text-5xl font-bold text-accent">Tribo Poker House</h1>
-        <p className="text-muted-foreground mt-2 text-lg">Bem-vindo, {user?.name}! Sua ferramenta completa para noites de poker.</p>
+        <p className="text-muted-foreground mt-2 text-lg">Bem-vindo, {user?.name || user?.nickname}! Sua ferramenta completa para noites de poker.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
         <Link href="/tournament" passHref>

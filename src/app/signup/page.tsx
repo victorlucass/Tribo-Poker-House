@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,26 +39,24 @@ export default function SignupPage() {
     }
 
     try {
-      // Check if nickname is already taken in Firestore
-      const nicknameQuery = query(collection(firestore, "users"), where("nickname", "==", nickname.trim()));
-      const nicknameSnapshot = await getDocs(nicknameQuery);
-      if (!nicknameSnapshot.empty) {
-        toast({ variant: 'destructive', title: 'Erro de Cadastro', description: 'Este apelido já está em uso. Por favor, escolha outro.' });
-        setIsLoading(false);
-        return;
-      }
-      
       // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // The user profile document in Firestore will be created by a Cloud Function trigger.
-      // We just need to update the auth profile display name here.
-      await updateProfile(userCredential.user, {
+      const user = userCredential.user;
+
+      // Update Firebase Auth profile
+      await updateProfile(user, {
         displayName: name,
       });
 
-      // The backend function will create the user profile with the nickname.
-      // We can redirect to login.
+      // Create user profile document in Firestore
+      const userDocRef = doc(firestore, 'users', user.uid);
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        name,
+        nickname,
+        email: user.email,
+        role: 'player', // Default role
+      });
 
       toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });
       router.push('/login');
@@ -94,7 +92,7 @@ export default function SignupPage() {
             disabled={isLoading}
           />
           <Input
-            placeholder="Apelido (será seu login)"
+            placeholder="Apelido"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             disabled={isLoading}

@@ -35,8 +35,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: 'Login bem-sucedido!', description: 'Bem-vindo de volta.' });
-      // The AuthProvider will handle the redirect to the home page.
-      // We don't need to push the router here anymore.
+      // The AuthProvider will handle the redirect.
     } catch (error: any) {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';
@@ -54,7 +53,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><KeyRound /> Acesso</CardTitle>
-          <CardDescription>Faça login com seu email e senha para gerenciar e participar das salas de jogo.</CardDescription>
+          <CardDescription>Faça login com seu email e senha para continuar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
