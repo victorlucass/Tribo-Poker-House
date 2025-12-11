@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Only run the auth logic once the firebase user loading is complete
+    // Keep loading until firebase user state is resolved
     if (isUserLoading) {
       return;
     }
@@ -44,11 +44,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (firebaseUser) {
       if (!firestore) {
-        // Firestore is not ready yet, still loading.
         setLoading(true);
         return;
       }
-      // User is logged in, fetch profile
       const userDocRef = doc(firestore, 'users', firebaseUser.uid);
       getDoc(userDocRef)
         .then((docSnap) => {
@@ -56,34 +54,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUserProfile(docSnap.data() as UserProfile);
             if (isPublicPath) {
               router.push('/');
+            } else {
+              setLoading(false);
             }
           } else {
-            // User exists in Auth but not in Firestore, treat as logged out
+            // Auth record exists, but no user profile in Firestore.
             setUserProfile(null);
             if (!isPublicPath) {
               router.push('/login');
+            } else {
+               setLoading(false);
             }
           }
         })
-        .catch((error) => {
-          console.error('Error fetching user profile:', error);
+        .catch(() => {
+          // Error fetching profile. Treat as logged out.
           setUserProfile(null);
           if (!isPublicPath) {
             router.push('/login');
+          } else {
+            setLoading(false);
           }
-        })
-        .finally(() => {
-          setLoading(false);
         });
     } else {
-      // User is not logged in
+      // No firebase user
       setUserProfile(null);
       if (!isPublicPath) {
         router.push('/login');
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     }
-  }, [isUserLoading, firebaseUser, firestore, pathname, router]);
+  }, [firebaseUser, isUserLoading, firestore, pathname, router]);
+
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
   

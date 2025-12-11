@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -37,12 +37,9 @@ export default function SignupPage() {
       return;
     }
 
-    // We use a dummy email for Firebase Auth, as it's required for password-based auth.
-    // The actual unique identifier for login will be the nickname.
     const email = `${nickname.toLowerCase()}@tribo.poker`;
 
     try {
-      // Check if nickname already exists
       const nicknameQuery = query(collection(firestore, "users"), where("nickname", "==", nickname));
       const nicknameSnapshot = await getDocs(nicknameQuery);
       if (!nicknameSnapshot.empty) {
@@ -51,16 +48,12 @@ export default function SignupPage() {
         return;
       }
 
-      // Step 1: Create user in Firebase Auth.
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Step 2: Create user profile document in Firestore.
-      await setDoc(doc(firestore, "users", user.uid), {
-        uid: user.uid,
-        name: name,
-        nickname: nickname,
-        role: nickname === 'victorlucas.ao' ? 'root' : 'player'
+      
+      // The user profile document will be created by a Cloud Function trigger.
+      // We just need to update the auth profile here.
+      await updateProfile(userCredential.user, {
+        displayName: name,
       });
 
       toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });
@@ -70,7 +63,6 @@ export default function SignupPage() {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';
       if (error.code === 'auth/email-already-in-use') {
-        // This error now means the nickname is effectively taken.
         description = 'Este apelido já está em uso.';
       } else if (error.code === 'auth/weak-password') {
         description = 'A senha é muito fraca. Tente uma mais forte.';
