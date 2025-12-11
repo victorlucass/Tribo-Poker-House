@@ -17,13 +17,6 @@ export default function Home() {
   const auth = getAuth();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
-
-
   const handleLogout = () => {
     signOut(auth).then(() => {
       toast({ title: 'Logout efetuado com sucesso.' });
