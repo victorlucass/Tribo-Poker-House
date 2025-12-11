@@ -40,9 +40,9 @@ export interface CashGamePlayer {
     id: number;
     name: string;
     transactions: PlayerTransaction[];
-    finalChipCounts?: Record<string, number>; // Firestore can't store Maps, use object
-    seat?: number; // Posição na mesa
-    card?: Card; // Carta recebida no sorteio
+    finalChipCounts: Record<string, number>;
+    seat: number | null;
+    card: Card | null;
 }
 
 export interface PlayerTransaction {

@@ -362,7 +362,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
             chips: chipDistribution,
           },
         ],
-        seat: seat,
+        finalChipCounts: {},
+        seat: seat ?? null,
+        card: null,
       };
       
       const newPlayers = [...players, newPlayer];
@@ -500,7 +502,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const handlePlayerChipCountChange = (playerId: number, chipId: number, count: number) => {
     const updatedPlayers = players.map((p) => {
       if (p.id === playerId) {
-        const newCounts = new Map(p.finalChipCounts ? Object.entries(p.finalChipCounts).map(([k,v]) => [parseInt(k),v]) : []);
+        const newCounts = new Map(Object.entries(p.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
         newCounts.set(chipId, count);
         // Firestore cannot store maps, so convert to object
         const finalChipCountsObj = Object.fromEntries(newCounts);
@@ -522,7 +524,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const getPlayerSettlementData = useCallback(
     (player: Player) => {
       const totalInvested = player.transactions.reduce((acc, t) => acc + t.amount, 0);
-      const finalChipCountsMap = player.finalChipCounts ? new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v])) : new Map();
+      const finalChipCountsMap = new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
       const finalValue = Array.from(finalChipCountsMap.entries()).reduce((acc, [chipId, count]) => {
         const chip = sortedChips.find((c) => c.id === chipId);
         return acc + (chip ? chip.value * count : 0);
@@ -1253,7 +1255,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                         <TableBody>
                           {players.map((player) => {
                             const { totalInvested, finalValue } = getPlayerSettlementData(player);
-                            const pFinalChips = player.finalChipCounts ? new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v])) : new Map();
+                            const pFinalChips = new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
 
                             return (
                               <TableRow key={player.id}>
@@ -1595,5 +1597,3 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 };
 
 export default CashGameManager;
-
-    
