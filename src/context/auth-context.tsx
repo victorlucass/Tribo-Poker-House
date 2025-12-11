@@ -16,12 +16,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const FullScreenLoader = () => (
-    <div className="flex h-screen w-full items-center justify-center bg-background p-8">
-        <div className="w-full max-w-md space-y-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-16 w-full" />
-        </div>
+  <div className="flex h-screen w-full items-center justify-center bg-background p-8">
+    <div className="w-full max-w-md space-y-4">
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-16 w-full" />
     </div>
+  </div>
 );
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -34,79 +34,72 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This effect handles the entire auth flow sequentially.
-    const manageAuthFlow = async () => {
-      // 1. Wait for Firebase Auth to determine if a user is logged in.
-      if (isUserLoading) {
-        return; // Still waiting for Firebase...
-      }
-
-      // 2. If there's a Firebase user, try to fetch their profile from Firestore.
-      if (firebaseUser && firestore) {
-        const userDocRef = doc(firestore, 'users', firebaseUser.uid);
-        try {
-          const docSnap = await getDoc(userDocRef);
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as UserProfile);
-          } else {
-            console.warn("User exists in Auth, but not in Firestore.", firebaseUser.uid);
-            setUserProfile(null); // No profile found, treat as logged out.
-          }
-        } catch (error) {
-          console.error("Error fetching user profile:", error);
-          setUserProfile(null);
-        } finally {
-          // Finish loading only after Firestore lookup is complete.
-          setLoading(false);
-        }
-      } else {
-        // 3. If there's no Firebase user, there's no profile to fetch. Finish loading.
-        setUserProfile(null);
-        setLoading(false);
-      }
-    };
-
-    manageAuthFlow();
-  }, [firebaseUser, isUserLoading, firestore]);
-
-  useEffect(() => {
-    // This effect handles redirection and should only run AFTER the loading is complete.
-    if (loading) {
-      return; // Do not redirect while still loading.
+    // Don't do anything until Firebase Auth has initialized
+    if (isUserLoading) {
+      return;
     }
 
     const publicPaths = ['/login', '/signup'];
     const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
 
-    // If loading is finished, there's no user, and we are on a protected path...
-    if (!userProfile && !isPublicPath) {
-      // ...redirect to login.
-      router.push('/login');
+    // If there's a logged-in user, fetch their profile
+    if (firebaseUser && firestore) {
+      const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+      getDoc(userDocRef)
+        .then(docSnap => {
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data() as UserProfile);
+          } else {
+            // This can happen if the user is deleted from Firestore but not from Auth
+            console.warn("User profile not found in Firestore for UID:", firebaseUser.uid);
+            setUserProfile(null);
+            // If they are on a protected path, they need to be redirected
+            if (!isPublicPath) {
+              router.push('/login');
+            }
+          }
+        })
+        .catch(error => {
+          console.error("Error fetching user profile:", error);
+          setUserProfile(null);
+           if (!isPublicPath) {
+             router.push('/login');
+           }
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      // No user is logged in
+      setUserProfile(null);
+      setLoading(false);
+      // If the user is not on a public path, redirect them
+      if (!isPublicPath) {
+        router.push('/login');
+      }
     }
-  }, [loading, userProfile, pathname, router]);
+  }, [firebaseUser, isUserLoading, firestore, pathname, router]);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
   const publicPaths = ['/login', '/signup'];
   const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
   
-  // While loading, if we are on a protected path, show a full screen loader.
+  // While any authentication logic is running, show a loader on protected pages.
   if (loading && !isPublicPath) {
     return <FullScreenLoader />;
   }
-  
-  // If we are on a public path (like login), show it.
-  // Or, if loading is done AND we have a user, show the protected content.
+
+  // If we are on a public path, or if loading is done and we have a user, show the content.
   if (isPublicPath || (!loading && userProfile)) {
-      return (
-          <AuthContext.Provider value={{ user: userProfile, loading, isAdmin }}>
-              {children}
-          </AuthContext.Provider>
-      );
+    return (
+      <AuthContext.Provider value={{ user: userProfile, loading, isAdmin }}>
+        {children}
+      </AuthContext.Provider>
+    );
   }
 
-  // This final case handles the moment on a protected path right after loading finishes
-  // but before the redirection useEffect kicks in. It shows the loader to prevent a flicker.
-  // It also correctly handles the logged-out state on protected paths.
+  // For any other case (e.g., logged out on a protected route after loading), show the loader
+  // This prevents content flashing before the redirect useEffect kicks in.
   return <FullScreenLoader />;
 };
 
