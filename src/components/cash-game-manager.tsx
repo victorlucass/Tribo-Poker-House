@@ -8,7 +8,7 @@ import type {
   CashGamePlayer as Player,
   CashedOutPlayer,
   PlayerTransaction,
-  JoinRequest
+  JoinRequest,
 } from '@/lib/types';
 import {
   Card,
@@ -55,7 +55,7 @@ import {
   Copy,
   Lock,
   Check,
-  X
+  X,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -65,7 +65,7 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc, setDoc, deleteDoc, updateDoc, arrayRemove, arrayUnion, getDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc, arrayRemove, getDoc, arrayUnion } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -191,15 +191,15 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { toast } = useToast();
   const firestore = useFirestore();
   const router = useRouter();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin, loading: isAuthLoading } = useAuth();
   const auth = getAuth();
 
   const handleLogout = () => {
     signOut(auth).then(() => {
-        toast({ title: 'Logout efetuado com sucesso.'})
-        router.push('/login');
+      toast({ title: 'Logout efetuado com sucesso.' });
+      router.push('/login');
     });
-  }
+  };
 
   const gameRef = useMemoFirebase(() => {
     if (!firestore || !gameId) return null;
@@ -222,13 +222,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     },
     [gameRef]
   );
-  
+
   const chips = game?.chips ?? [];
   const players = game?.players ?? [];
   const cashedOutPlayers = game?.cashedOutPlayers ?? [];
   const positionsSet = game?.positionsSet ?? false;
   const requests = game?.requests ?? [];
-  
+
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerBuyIn, setNewPlayerBuyIn] = useState('');
   const [isAddChipOpen, setIsAddChipOpen] = useState(false);
@@ -261,17 +261,20 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const [approvingPlayer, setApprovingPlayer] = useState<JoinRequest | null>(null);
   const [approvalBuyIn, setApprovalBuyIn] = useState('');
 
-
   const sortedChips = useMemo(() => [...chips].sort((a, b) => a.value - b.value), [chips]);
 
   const handleStartDealing = () => {
     if (players.length < 2) {
-      toast({ variant: 'destructive', title: 'Jogadores Insuficientes', description: 'Precisa de pelo menos 2 jogadores para sortear as posições.' });
+      toast({
+        variant: 'destructive',
+        title: 'Jogadores Insuficientes',
+        description: 'Precisa de pelo menos 2 jogadores para sortear as posições.',
+      });
       return;
     }
     const { playersWithDealtCards, sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
     // This is the list that the animation component will use to present the cards in order
-    setPlayersForAnimation(playersWithDealtCards); 
+    setPlayersForAnimation(playersWithDealtCards);
     // This is the final state with seats assigned, saved to Firestore
     updateGame({
       players: sortedPlayers,
@@ -283,11 +286,14 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const onDealingComplete = () => {
     setIsDealing(false);
     updateGame({ positionsSet: true });
-    const dealer = players.find((p) => p.id === game?.dealerId)
+    const dealer = players.find((p) => p.id === game?.dealerId);
     toast({ title: 'Posições Definidas!', description: `O dealer é ${dealer?.name}.` });
   };
-  
-  const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy' | 'approve', details: { playerId?: string; playerName?: string; amount: number; request?: JoinRequest }) => {
+
+  const handleOpenDistributionModal = (
+    type: 'buy-in' | 'rebuy' | 'approve',
+    details: { playerId?: string; playerName?: string; amount: number; request?: JoinRequest }
+  ) => {
     const { amount } = details;
 
     if (isNaN(amount) || amount <= 0) {
@@ -339,50 +345,24 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       });
       return;
     }
-    
-    // Fetch the latest game data to avoid race conditions
+  
     const gameDoc = await getDoc(gameRef);
     if (!gameDoc.exists()) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'A sala não existe mais.' });
-        return;
+      toast({ variant: 'destructive', title: 'Erro', description: 'A sala não existe mais.' });
+      return;
     }
     const currentGameData = gameDoc.data() as CashGame;
-    const currentPlayers = currentGameData.players || [];
-    const currentRequests = currentGameData.requests || [];
-  
-    let seat: number | undefined = undefined;
-    if (currentGameData.positionsSet) {
-      const occupiedSeats = new Set(currentPlayers.map((p) => p.seat));
-      for (let i = 1; i <= 10; i++) {
-        if (!occupiedSeats.has(i)) {
-          seat = i;
-          break;
-        }
-      }
-      if (seat === undefined) {
-        toast({ variant: 'destructive', title: 'Mesa Cheia', description: 'Não há assentos disponíveis.' });
-        return;
-      }
-    }
-  
-    const newPlayer: Player = {
-      id: playerId || playerName!,
-      name: playerName!,
-      transactions: [
-        {
-          id: 1,
-          type: 'buy-in',
-          amount: amount,
-          chips: chipDistribution,
-        },
-      ],
-      finalChipCounts: {},
-      seat: seat ?? null,
-      card: null,
-    };
   
     if (type === 'buy-in') {
-      let updatedPlayers = [...currentPlayers, newPlayer];
+      const newPlayer: Player = {
+        id: playerName!, // For manual players, ID is the name for simplicity before having a user system
+        name: playerName!,
+        transactions: [{ id: 1, type: 'buy-in', amount: amount, chips: chipDistribution }],
+        finalChipCounts: {},
+        seat: null,
+        card: null,
+      };
+      let updatedPlayers = [...currentGameData.players, newPlayer];
       if (positionsSet) {
         updatedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
       }
@@ -391,35 +371,68 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       setNewPlayerName('');
       setNewPlayerBuyIn('');
     } else if (type === 'approve' && request) {
-      let updatedPlayers = [...currentPlayers, newPlayer];
-       if (positionsSet) {
-        updatedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
-      }
-      const updatedRequests = currentRequests.filter(r => r.userId !== request.userId);
+        const gameDoc = await getDoc(gameRef);
+        if (!gameDoc.exists()) {
+          toast({ variant: 'destructive', title: 'Erro', description: 'A sala não existe mais.' });
+          return;
+        }
+        const currentGameData = gameDoc.data() as CashGame;
+
+        let seat: number | undefined = undefined;
+        if (currentGameData.positionsSet) {
+            const occupiedSeats = new Set(currentGameData.players.map((p) => p.seat));
+            for (let i = 1; i <= 10; i++) {
+                if (!occupiedSeats.has(i)) {
+                    seat = i;
+                    break;
+                }
+            }
+            if (seat === undefined) {
+                toast({ variant: 'destructive', title: 'Mesa Cheia', description: 'Não há assentos disponíveis.' });
+                return;
+            }
+        }
+    
+        const newPlayer: Player = {
+            id: request.userId,
+            name: request.userName,
+            transactions: [{ id: 1, type: 'buy-in', amount: amount, chips: chipDistribution }],
+            finalChipCounts: {},
+            seat: seat ?? null,
+            card: null,
+        };
+        
+        let updatedPlayers = [...currentGameData.players, newPlayer];
+        if (positionsSet) {
+            updatedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
+        }
+
+        // Atomically update players and requests
+        const updatedRequests = currentGameData.requests.filter(r => r.userId !== request.userId);
+    
+        updateGame({
+            players: updatedPlayers,
+            requests: updatedRequests
+        });
+        toast({ title: 'Jogador Aprovado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
+    } else if (type === 'rebuy' && playerId) {
+      const playerIndex = currentGameData.players.findIndex(p => p.id === playerId);
+      if (playerIndex === -1) return;
   
-      updateGame({
-        players: updatedPlayers,
-        requests: updatedRequests
-      });
-      toast({ title: 'Jogador Aprovado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
-  
-    } else { // rebuy
+      const player = currentGameData.players[playerIndex];
       const newTransaction: PlayerTransaction = {
-        id: (playerForDetails!.transactions.length > 0 ? Math.max(...playerForDetails!.transactions.map((t) => t.id)) : 0) + 1,
+        id: (player.transactions.length > 0 ? Math.max(...player.transactions.map((t) => t.id)) : 0) + 1,
         type: 'rebuy',
         amount,
         chips: chipDistribution,
       };
   
-      const updatedPlayers = currentPlayers.map((p) => {
-        if (p.id === playerId) {
-          return { ...p, transactions: [...p.transactions, newTransaction] };
-        }
-        return p;
-      });
-      updateGame({ players: updatedPlayers });
+      const updatedPlayer = { ...player, transactions: [...player.transactions, newTransaction] };
+      const updatedPlayers = [...currentGameData.players];
+      updatedPlayers[playerIndex] = updatedPlayer;
   
-      setPlayerForDetails((prev) => (prev ? { ...prev, transactions: [...prev.transactions, newTransaction] } : null));
+      updateGame({ players: updatedPlayers });
+      setPlayerForDetails(updatedPlayer);
       toast({ title: 'Transação Concluída!', description: `R$${amount.toFixed(2)} adicionado para ${playerName}.` });
       setRebuyAmount('');
     }
@@ -445,12 +458,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   };
 
   const handleDeclineRequest = (request: JoinRequest) => {
-    updateGame({
-      requests: arrayRemove(request)
+    if (!gameRef) return;
+    updateDoc(gameRef, {
+      requests: arrayRemove(request),
+    }).then(() => {
+      toast({ title: 'Solicitação Recusada', description: `O pedido de ${request.userName} foi recusado.` });
     });
-    toast({ title: 'Solicitação Recusada', description: `O pedido de ${request.userName} foi recusado.` });
   };
-
 
   const removePlayer = (id: string) => {
     updateGame({
@@ -482,7 +496,11 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 
   const handleRemoveChip = (id: number) => {
     if (players.length > 0 || cashedOutPlayers.length > 0) {
-      toast({ variant: 'destructive', title: 'Ação Bloqueada', description: 'Não é possível remover fichas com um jogo em andamento.' });
+      toast({
+        variant: 'destructive',
+        title: 'Ação Bloqueada',
+        description: 'Não é possível remover fichas com um jogo em andamento.',
+      });
       return;
     }
     updateGame({ chips: chips.filter((c) => c.id !== id) });
@@ -496,7 +514,11 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       { id: 4, value: 10, color: '#171717', name: 'Preta' },
     ];
     if (players.length > 0 || cashedOutPlayers.length > 0) {
-      toast({ variant: 'destructive', title: 'Ação Bloqueada', description: 'Não é possível resetar as fichas com um jogo em andamento.' });
+      toast({
+        variant: 'destructive',
+        title: 'Ação Bloqueada',
+        description: 'Não é possível resetar as fichas com um jogo em andamento.',
+      });
       return;
     }
     updateGame({ chips: initialChips });
@@ -554,7 +576,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const handlePlayerChipCountChange = (playerId: string, chipId: number, count: number) => {
     const updatedPlayers = players.map((p) => {
       if (p.id === playerId) {
-        const newCounts = new Map(Object.entries(p.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
+        const newCounts = new Map(Object.entries(p.finalChipCounts).map(([k, v]) => [parseInt(k), v]));
         newCounts.set(chipId, count);
         const finalChipCountsObj = Object.fromEntries(newCounts);
         return { ...p, finalChipCounts: finalChipCountsObj };
@@ -563,7 +585,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     });
     updateGame({ players: updatedPlayers });
   };
-  
+
   const handleTipRakeChipCountChange = (type: 'tips' | 'rake', chipId: number, count: number) => {
     if (type === 'tips') {
       setCroupierTipsChipCounts((prev) => new Map(prev).set(chipId, count));
@@ -575,7 +597,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const getPlayerSettlementData = useCallback(
     (player: Player) => {
       const totalInvested = player.transactions.reduce((acc, t) => acc + t.amount, 0);
-      const finalChipCountsMap = new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
+      const finalChipCountsMap = new Map(Object.entries(player.finalChipCounts).map(([k, v]) => [parseInt(k), v]));
       const finalValue = Array.from(finalChipCountsMap.entries()).reduce((acc, [chipId, count]) => {
         const chip = sortedChips.find((c) => c.id === chipId);
         return acc + (chip ? chip.value * count : 0);
@@ -585,7 +607,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     },
     [sortedChips]
   );
-  
+
   const croupierTipsValue = useMemo(() => {
     return Array.from(croupierTipsChipCounts.entries()).reduce((acc, [chipId, count]) => {
       const chip = sortedChips.find((c) => c.id === chipId);
@@ -624,12 +646,12 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 
     const totalCashedOutChips = new Map<number, number>();
     cashedOutPlayers.forEach((p) => {
-        const pChipCounts = new Map(Object.entries(p.chipCounts).map(([k,v]) => [parseInt(k),v]));
-        pChipCounts.forEach((count, chipId) => {
-            totalCashedOutChips.set(chipId, (totalCashedOutChips.get(chipId) || 0) + count);
-        });
+      const pChipCounts = new Map(Object.entries(p.chipCounts).map(([k, v]) => [parseInt(k), v]));
+      pChipCounts.forEach((count, chipId) => {
+        totalCashedOutChips.set(chipId, (totalCashedOutChips.get(chipId) || 0) + count);
+      });
     });
-    
+
     const remainingChips = new Map<number, number>();
     sortedChips.forEach((chip) => {
       const distributed = totalDistributed.get(chip.id) || 0;
@@ -661,7 +683,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     if (!playerToCashOut) return;
 
     const totalInvested = playerToCashOut.transactions.reduce((acc, t) => acc + t.amount, 0);
-    
+
     const newCashedOutPlayer: CashedOutPlayer = {
       id: playerToCashOut.id,
       name: playerToCashOut.name,
@@ -679,7 +701,10 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 
     toast({
       title: 'Cash Out Realizado!',
-      description: `${playerToCashOut.name} saiu da mesa com ${cashOutValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`,
+      description: `${playerToCashOut.name} saiu da mesa com ${cashOutValue.toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+      })}.`,
     });
 
     setIsCashOutOpen(false);
@@ -693,62 +718,61 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
         toast({ title: 'Sessão Finalizada!', description: 'A sala foi apagada e está pronta para ser recriada.' });
         router.push('/cash-game');
       } catch (e) {
-         console.error('Failed to delete game:', e);
-         toast({ variant: 'destructive', title: 'Erro ao Finalizar', description: 'Não foi possível apagar a sala.' });
+        console.error('Failed to delete game:', e);
+        toast({ variant: 'destructive', title: 'Erro ao Finalizar', description: 'Não foi possível apagar a sala.' });
       }
     }
   };
-  
-  if (status === 'loading') {
-      return (
-          <div className="min-h-screen w-full bg-background p-4 md:p-8">
-              <div className="mx-auto w-full max-w-7xl space-y-8">
-                  <Skeleton className="h-16 w-1/2" />
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                      <div className="lg:col-span-2 space-y-8">
-                          <Skeleton className="h-40 w-full" />
-                          <Skeleton className="h-64 w-full" />
-                          <Skeleton className="h-64 w-full" />
-                      </div>
-                      <div className="space-y-8">
-                          <Skeleton className="h-32 w-full" />
-                          <Skeleton className="h-96 w-full" />
-                          <Skeleton className="h-48 w-full" />
-                      </div>
-                  </div>
-              </div>
+
+  if (status === 'loading' || isAuthLoading) {
+    return (
+      <div className="min-h-screen w-full bg-background p-4 md:p-8">
+        <div className="mx-auto w-full max-w-7xl space-y-8">
+          <Skeleton className="h-16 w-1/2" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+              <Skeleton className="h-40 w-full" />
+              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-64 w-full" />
+            </div>
+            <div className="space-y-8">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-96 w-full" />
+              <Skeleton className="h-48 w-full" />
+            </div>
           </div>
-      )
+        </div>
+      </div>
+    );
   }
 
   if (status === 'error' || (status === 'success' && !game)) {
-      return (
-          <div className="flex h-screen items-center justify-center">
-              <Card className="max-w-lg text-center">
-                  <CardHeader>
-                      <CardTitle className="text-destructive">Erro ao Carregar a Sala</CardTitle>
-                      <CardDescription>
-                        {status === 'error' 
-                          ? 'Não foi possível conectar ao banco de dados. Verifique sua conexão e as regras de segurança do Firestore.'
-                          : 'A sala que você está tentando acessar não foi encontrada. Verifique o ID e tente novamente.'
-                        }
-                      </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                      {error && <pre className="bg-muted p-2 rounded-md text-xs text-left">{error?.message}</pre>}
-                       <Button asChild>
-                         <Link href="/cash-game">Voltar</Link>
-                       </Button>
-                  </CardContent>
-              </Card>
-          </div>
-      )
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Card className="max-w-lg text-center">
+          <CardHeader>
+            <CardTitle className="text-destructive">Erro ao Carregar a Sala</CardTitle>
+            <CardDescription>
+              {status === 'error'
+                ? 'Não foi possível conectar ao banco de dados. Verifique sua conexão e as regras de segurança do Firestore.'
+                : 'A sala que você está tentando acessar não foi encontrada. Verifique o ID e tente novamente.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {error && <pre className="bg-muted p-2 rounded-md text-xs text-left">{error?.message}</pre>}
+            <Button asChild>
+              <Link href="/cash-game">Voltar</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const copyGameId = () => {
     navigator.clipboard.writeText(gameId);
     toast({ title: 'ID da Sala Copiado!', description: 'Você pode compartilhar este ID com seus amigos.' });
-  }
+  };
 
   return (
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
@@ -756,481 +780,502 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       <div className="mx-auto w-full max-w-7xl">
         {/* Mobile Header */}
         <div className="mb-4 flex flex-col gap-4 md:hidden">
-            <div className="flex w-full items-center justify-between">
-                <Button asChild variant="outline" size="icon">
-                  <Link href="/cash-game">
-                    <ArrowLeft />
-                  </Link>
-                </Button>
-                {isAdmin && (
-                    <Button variant="outline" onClick={handleLogout}>
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Sair
-                    </Button>
-                )}
+          <div className="flex w-full items-center justify-between">
+            <Button asChild variant="outline" size="icon">
+              <Link href="/cash-game">
+                <ArrowLeft />
+              </Link>
+            </Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-col items-start gap-1">
+            <h1 className="font-headline text-3xl font-bold text-accent">{game?.name}</h1>
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
+                <Copy className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex flex-col items-start gap-1">
-                <h1 className="font-headline text-3xl font-bold text-accent">
-                  {game?.name}
-                </h1>
-                <div className="flex items-center gap-2">
-                  <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
-                      <Copy className="h-4 w-4"/>
-                  </Button>
-                </div>
-            </div>
+          </div>
         </div>
 
         {/* Desktop Header */}
         <header className="mb-8 hidden md:flex items-center justify-between">
-            <div className='flex items-center gap-4'>
-                <Button asChild variant="outline" size="icon">
-                  <Link href="/cash-game">
-                    <ArrowLeft />
-                  </Link>
+          <div className="flex items-center gap-4">
+            <Button asChild variant="outline" size="icon">
+              <Link href="/cash-game">
+                <ArrowLeft />
+              </Link>
+            </Button>
+            <div className="flex flex-col items-start gap-1">
+              <h1 className="font-headline text-3xl font-bold text-accent md:text-4xl">{game?.name}</h1>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
+                  <Copy className="h-4 w-4" />
                 </Button>
-                <div className="flex flex-col items-start gap-1">
-                    <h1 className="font-headline text-3xl font-bold text-accent md:text-4xl">
-                      {game?.name}
-                    </h1>
-                    <div className="flex items-center gap-2">
-                      <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
-                          <Copy className="h-4 w-4"/>
-                      </Button>
-                    </div>
-                </div>
+              </div>
             </div>
-            {isAdmin && (
-                <Button variant="outline" onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sair do Modo Admin
-                </Button>
-            )}
+          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Sair
+          </Button>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <Card className="lg:hidden">
-              <CardHeader>
-                <CardTitle className="text-secondary-foreground">Banca Ativa</CardTitle>
-                <CardDescription className="text-secondary-foreground/80">
-                  Valor total que entrou na mesa (jogadores ativos).
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-4xl font-bold text-accent">
-                  {totalActivePlayerBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </p>
-              </CardContent>
-            </Card>
+          <Card className="lg:hidden">
+            <CardHeader>
+              <CardTitle className="text-secondary-foreground">Banca Ativa</CardTitle>
+              <CardDescription className="text-secondary-foreground/80">
+                Valor total que entrou na mesa (jogadores ativos).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-4xl font-bold text-accent">
+                {totalActivePlayerBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </p>
+            </CardContent>
+          </Card>
 
           <main className="lg:col-span-2 space-y-8">
-              {isAdmin && (
-                  <Card>
-                  <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                      <UserPlus /> Adicionar Jogador Manualmente
-                      </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                      <div className="flex flex-col md:flex-row gap-4">
-                      <Input
-                          placeholder="Nome do Jogador"
-                          value={newPlayerName}
-                          onChange={(e) => setNewPlayerName(e.target.value)}
-                      />
-                      <Input
-                          type="number"
-                          inputMode="decimal"
-                          placeholder="Valor do Buy-in (R$)"
-                          value={newPlayerBuyIn}
-                          onChange={(e) => setNewPlayerBuyIn(e.target.value)}
-                      />
-                      <Button onClick={() => {
+            {isAdmin && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <UserPlus /> Adicionar Jogador Manualmente
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <Input
+                      placeholder="Nome do Jogador"
+                      value={newPlayerName}
+                      onChange={(e) => setNewPlayerName(e.target.value)}
+                    />
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="Valor do Buy-in (R$)"
+                      value={newPlayerBuyIn}
+                      onChange={(e) => setNewPlayerBuyIn(e.target.value)}
+                    />
+                    <Button
+                      onClick={() => {
                         if (!newPlayerName || !newPlayerBuyIn) {
-                            toast({ variant: 'destructive', title: 'Erro', description: 'Preencha o nome e o valor de buy-in.' });
-                            return;
+                          toast({
+                            variant: 'destructive',
+                            title: 'Erro',
+                            description: 'Preencha o nome e o valor de buy-in.',
+                          });
+                          return;
                         }
-                         handleOpenDistributionModal('buy-in', {
-                            playerName: newPlayerName,
-                            amount: parseFloat(newPlayerBuyIn)
-                         });
-                       }} className="w-full md:w-auto">
-                          <PlusCircle className="mr-2" />
-                          Adicionar
-                      </Button>
-                      </div>
-                  </CardContent>
-                  </Card>
-              )}
+                        handleOpenDistributionModal('buy-in', {
+                          playerName: newPlayerName,
+                          amount: parseFloat(newPlayerBuyIn),
+                        });
+                      }}
+                      className="w-full md:w-auto"
+                    >
+                      <PlusCircle className="mr-2" />
+                      Adicionar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-              {isAdmin && requests.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-primary">
-                      <Lock /> Solicitações Pendentes
-                    </CardTitle>
-                    <CardDescription>Aprove ou recuse os jogadores que pediram para entrar na sala.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {requests.map((req) => (
-                      <div key={req.userId} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                        <div>
-                          <p className="font-semibold">{req.userName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Pedido às {new Date(req.requestedAt).toLocaleTimeString('pt-BR')}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                               <Button size="icon" variant="outline" className="text-green-400 border-green-400/50 hover:bg-green-400/10 hover:text-green-300" onClick={() => setApprovingPlayer(req)}>
-                                <Check className="h-5 w-5" />
+            {isAdmin && requests.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-primary">
+                    <Lock /> Solicitações Pendentes
+                  </CardTitle>
+                  <CardDescription>Aprove ou recuse os jogadores que pediram para entrar na sala.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {requests.map((req) => (
+                    <div key={req.userId} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                      <div>
+                        <p className="font-semibold">{req.userName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Pedido às {new Date(req.requestedAt).toLocaleTimeString('pt-BR')}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="text-green-400 border-green-400/50 hover:bg-green-400/10 hover:text-green-300"
+                              onClick={() => setApprovingPlayer(req)}
+                            >
+                              <Check className="h-5 w-5" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-md">
+                            <DialogHeader>
+                              <DialogTitle>Aprovar {req.userName}?</DialogTitle>
+                              <DialogDescription>
+                                Insira o valor do buy-in para adicionar o jogador à mesa.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="py-4">
+                              <Label htmlFor="approval-buy-in">Valor do Buy-in (R$)</Label>
+                              <Input
+                                id="approval-buy-in"
+                                type="number"
+                                inputMode="decimal"
+                                placeholder="Ex: 50.00"
+                                value={approvalBuyIn}
+                                onChange={(e) => setApprovalBuyIn(e.target.value)}
+                              />
+                            </div>
+                            <DialogFooter>
+                              <DialogClose asChild>
+                                <Button variant="outline">Cancelar</Button>
+                              </DialogClose>
+                              <Button onClick={() => handleApproveRequest(req)} disabled={!approvalBuyIn}>
+                                Confirmar e Distribuir Fichas
                               </Button>
-                            </DialogTrigger>
-                             <DialogContent className="max-w-md">
-                                <DialogHeader>
-                                  <DialogTitle>Aprovar {req.userName}?</DialogTitle>
-                                  <DialogDescription>
-                                    Insira o valor do buy-in para adicionar o jogador à mesa.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="py-4">
-                                  <Label htmlFor="approval-buy-in">Valor do Buy-in (R$)</Label>
-                                  <Input
-                                    id="approval-buy-in"
-                                    type="number"
-                                    inputMode="decimal"
-                                    placeholder="Ex: 50.00"
-                                    value={approvalBuyIn}
-                                    onChange={(e) => setApprovalBuyIn(e.target.value)}
-                                  />
-                                </div>
-                                <DialogFooter>
-                                   <DialogClose asChild>
-                                    <Button variant="outline">Cancelar</Button>
-                                  </DialogClose>
-                                  <Button onClick={() => handleApproveRequest(req)} disabled={!approvalBuyIn}>
-                                    Confirmar e Distribuir Fichas
-                                  </Button>
-                                </DialogFooter>
-                              </DialogContent>
-                          </Dialog>
-                          <Button size="icon" variant="destructive" onClick={() => handleDeclineRequest(req)}>
-                            <X className="h-5 w-5" />
-                          </Button>
-                        </div>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Button size="icon" variant="destructive" onClick={() => handleDeclineRequest(req)}>
+                          <X className="h-5 w-5" />
+                        </Button>
                       </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {positionsSet && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Mesa de Jogo</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <PokerTable players={players} dealerId={game?.dealerId ?? null} />
-                  </CardContent>
-                </Card>
-              )}
-
-              <Dialog
-                onOpenChange={(isOpen) => {
-                  if (!isOpen) {
-                    setPlayerForDetails(null);
-                    setRebuyAmount('');
-                  }
-                }}
-              >
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle>Jogadores na Mesa</CardTitle>
-                      <CardDescription>Distribuição de fichas e ações para cada jogador ativo.</CardDescription>
                     </div>
-                    {!positionsSet && players.length > 1 && isAdmin && (
-                      <Button onClick={handleStartDealing} variant="secondary">
-                        <Shuffle className="mr-2 h-4 w-4" />
-                        Sortear Posições
-                      </Button>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {positionsSet && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mesa de Jogo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <PokerTable players={players} dealerId={game?.dealerId ?? null} />
+                </CardContent>
+              </Card>
+            )}
+
+            <Dialog
+              onOpenChange={(isOpen) => {
+                if (!isOpen) {
+                  setPlayerForDetails(null);
+                  setRebuyAmount('');
+                }
+              }}
+            >
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Jogadores na Mesa</CardTitle>
+                    <CardDescription>Distribuição de fichas e ações para cada jogador ativo.</CardDescription>
+                  </div>
+                  {!positionsSet && players.length > 1 && isAdmin && (
+                    <Button onClick={handleStartDealing} variant="secondary">
+                      <Shuffle className="mr-2 h-4 w-4" />
+                      Sortear Posições
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Jogador</TableHead>
+                          <TableHead className="text-right">Buy-in Total</TableHead>
+                          {sortedChips.map((chip) => (
+                            <TableHead key={chip.id} className="text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <ChipIcon color={chip.color} />
+                                <span className="whitespace-nowrap">
+                                  {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                              </div>
+                            </TableHead>
+                          ))}
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {players.length === 0 ? (
                           <TableRow>
-                            <TableHead>Jogador</TableHead>
-                            <TableHead className="text-right">Buy-in Total</TableHead>
-                            {sortedChips.map((chip) => (
-                              <TableHead key={chip.id} className="text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                  <ChipIcon color={chip.color} />
-                                  <span className="whitespace-nowrap">
-                                    {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                  </span>
-                                </div>
-                              </TableHead>
-                            ))}
-                            <TableHead className="text-right">Ações</TableHead>
+                            <TableCell
+                              colSpan={4 + sortedChips.length}
+                              className="text-center text-muted-foreground h-24"
+                            >
+                              Nenhum jogador na mesa ainda.
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {players.length === 0 ? (
-                            <TableRow>
-                              <TableCell
-                                colSpan={4 + sortedChips.length}
-                                className="text-center text-muted-foreground h-24"
-                              >
-                                Nenhum jogador na mesa ainda.
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            players.map((player) => {
-                              const playerTotalBuyIn = player.transactions.reduce((acc, t) => acc + t.amount, 0);
-                              const playerTotalChips = getPlayerTotalChips(player);
-                              return (
-                                <TableRow key={player.id}>
-                                  <TableCell className="font-medium">{player.name}</TableCell>
-                                  <TableCell className="text-right font-mono">
-                                    {playerTotalBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        ) : (
+                          players.map((player) => {
+                            const playerTotalBuyIn = player.transactions.reduce((acc, t) => acc + t.amount, 0);
+                            const playerTotalChips = getPlayerTotalChips(player);
+                            return (
+                              <TableRow key={player.id}>
+                                <TableCell className="font-medium">{player.name}</TableCell>
+                                <TableCell className="text-right font-mono">
+                                  {playerTotalBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </TableCell>
+                                {playerTotalChips.map((chip) => (
+                                  <TableCell key={chip.chipId} className="text-center font-mono">
+                                    {chip.count}
                                   </TableCell>
-                                  {playerTotalChips.map((chip) => (
-                                    <TableCell key={chip.chipId} className="text-center font-mono">
-                                      {chip.count}
-                                    </TableCell>
-                                  ))}
-                                  <TableCell className="text-right flex items-center justify-end gap-1">
+                                ))}
+                                <TableCell className="text-right flex items-center justify-end gap-1">
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setPlayerForDetails(player)}
+                                      disabled={!isAdmin}
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                    </Button>
+                                  </DialogTrigger>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleOpenCashOut(player)}
+                                    disabled={!isAdmin}
+                                  >
+                                    <LogOut className="h-4 w-4" />
+                                  </Button>
+                                  <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="outline" size="sm" onClick={() => setPlayerForDetails(player)} disabled={!isAdmin}>
-                                        <FileText className="h-4 w-4" />
+                                      <Button variant="ghost" size="icon" disabled={!isAdmin || players.length > 0}>
+                                        <Trash2 className="h-4 w-4 text-red-500" />
                                       </Button>
                                     </DialogTrigger>
-                                    <Button variant="outline" size="sm" onClick={() => handleOpenCashOut(player)} disabled={!isAdmin}>
-                                      <LogOut className="h-4 w-4" />
-                                    </Button>
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="icon" disabled={!isAdmin || positionsSet}>
-                                          <Trash2 className="h-4 w-4 text-red-500" />
+                                    <DialogContent className="max-w-md">
+                                      <DialogHeader>
+                                        <DialogTitle>Remover {player.name}?</DialogTitle>
+                                        <DialogDescription>
+                                          Tem certeza que deseja remover este jogador? Todas as suas transações serão
+                                          perdidas. Esta ação não é um cash out.
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <DialogFooter>
+                                        <DialogClose asChild>
+                                          <Button variant="outline">Cancelar</Button>
+                                        </DialogClose>
+                                        <Button variant="destructive" onClick={() => removePlayer(player.id)}>
+                                          Sim, Remover
                                         </Button>
-                                      </DialogTrigger>
-                                      <DialogContent className="max-w-md">
-                                        <DialogHeader>
-                                          <DialogTitle>Remover {player.name}?</DialogTitle>
-                                          <DialogDescription>
-                                            Tem certeza que deseja remover este jogador? Todas as suas transações serão
-                                            perdidas. Esta ação não é um cash out.
-                                          </DialogDescription>
-                                        </DialogHeader>
-                                        <DialogFooter>
-                                          <DialogClose asChild>
-                                            <Button variant="outline">Cancelar</Button>
-                                          </DialogClose>
-                                          <Button variant="destructive" onClick={() => removePlayer(player.id)}>
-                                            Sim, Remover
-                                          </Button>
-                                        </DialogFooter>
-                                      </DialogContent>
-                                    </Dialog>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })
-                          )}
-                        </TableBody>
-                        {players.length > 0 && (
-                          <UiTableFooter>
-                            <TableRow className="bg-muted/50 hover:bg-muted font-bold">
-                              <TableCell colSpan={2} className="text-right">
-                                Total de Fichas na Mesa
-                              </TableCell>
-                              {totalChipsOnTable.map(({ chip, count }) => (
-                                <TableCell key={chip.id} className="text-center font-mono">
-                                  {count}
+                                      </DialogFooter>
+                                    </DialogContent>
+                                  </Dialog>
                                 </TableCell>
-                              ))}
-                              <TableCell></TableCell>
-                            </TableRow>
-                            <TableRow className="bg-muted/80 hover-bg-muted font-bold">
-                              <TableCell colSpan={2} className="text-right">
-                                Valor Total na Mesa
-                              </TableCell>
-                              {totalValueOnTableByChip.map((value, index) => (
-                                <TableCell key={sortedChips[index].id} className="text-center font-mono">
-                                  {value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </TableCell>
-                              ))}
-                              <TableCell className="text-right font-mono">
-                                {grandTotalValueOnTable.toLocaleString('pt-BR', {
-                                  style: 'currency',
-                                  currency: 'BRL',
-                                })}
-                              </TableCell>
-                            </TableRow>
-                          </UiTableFooter>
+                              </TableRow>
+                            );
+                          })
                         )}
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <DialogContent className="max-w-4xl">
-                  <DialogHeader>
-                    <DialogTitle>Detalhes de {playerForDetails?.name}</DialogTitle>
-                    <DialogDescription>
-                      Histórico de transações e contagem de fichas do jogador.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  {playerForDetails && (
-                    <>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Transação</TableHead>
-                            <TableHead className="text-right">Valor</TableHead>
-                            {sortedChips.map((chip) => (
-                              <TableHead key={chip.id} className="text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                  <ChipIcon color={chip.color} />
-                                  <span className="whitespace-nowrap">
-                                    {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                  </span>
-                                </div>
-                              </TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {playerForDetails.transactions.map((trans) => (
-                            <TableRow key={trans.id}>
-                              <TableCell className="font-medium capitalize">
-                                {trans.type} #{trans.id}
-                              </TableCell>
-                              <TableCell className="text-right font-mono">
-                                {trans.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </TableCell>
-                              {sortedChips.map((chip) => {
-                                const tChip = trans.chips.find((c) => c.chipId === chip.id);
-                                return (
-                                  <TableCell key={chip.id} className="text-center font-mono">
-                                    {tChip?.count || 0}
-                                  </TableCell>
-                                );
-                              })}
-                            </TableRow>
-                          ))}
-                        </TableBody>
+                      </TableBody>
+                      {players.length > 0 && (
                         <UiTableFooter>
                           <TableRow className="bg-muted/50 hover:bg-muted font-bold">
                             <TableCell colSpan={2} className="text-right">
-                              Total de Fichas
+                              Total de Fichas na Mesa
                             </TableCell>
-                            {getPlayerTotalChips(playerForDetails).map((chip) => (
-                              <TableCell key={chip.chipId} className="text-center font-mono">
-                                {chip.count}
+                            {totalChipsOnTable.map(({ chip, count }) => (
+                              <TableCell key={chip.id} className="text-center font-mono">
+                                {count}
                               </TableCell>
                             ))}
+                            <TableCell></TableCell>
                           </TableRow>
-                          <TableRow className="bg-muted/80 hover:bg-muted font-bold">
+                          <TableRow className="bg-muted/80 hover-bg-muted font-bold">
                             <TableCell colSpan={2} className="text-right">
-                              Valor Total Investido
+                              Valor Total na Mesa
                             </TableCell>
-                            <TableCell colSpan={sortedChips.length + 1} className="text-left font-mono">
-                              {playerForDetails.transactions
-                                .reduce((acc, t) => acc + t.amount, 0)
-                                .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {totalValueOnTableByChip.map((value, index) => (
+                              <TableCell key={sortedChips[index].id} className="text-center font-mono">
+                                {value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right font-mono">
+                              {grandTotalValueOnTable.toLocaleString('pt-BR', {
+                                style: 'currency',
+                                currency: 'BRL',
+                              })}
                             </TableCell>
                           </TableRow>
                         </UiTableFooter>
-                      </Table>
+                      )}
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
 
-                      <Separator className="my-4" />
+              <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle>Detalhes de {playerForDetails?.name}</DialogTitle>
+                  <DialogDescription>
+                    Histórico de transações e contagem de fichas do jogador.
+                  </DialogDescription>
+                </DialogHeader>
 
-                      <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="rebuy-amount" className="text-right">
-                            Adicionar Valor (R$)
-                          </Label>
-                          <Input
-                            id="rebuy-amount"
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="Ex: 50"
-                            value={rebuyAmount}
-                            onChange={(e) => setRebuyAmount(e.target.value)}
-                            className="col-span-3"
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button onClick={() => handleOpenDistributionModal('rebuy', {
-                            playerId: playerForDetails.id,
-                            playerName: playerForDetails.name,
-                            amount: parseFloat(rebuyAmount)
-                        })}>Confirmar Adição</Button>
-                      </DialogFooter>
-                    </>
-                  )}
-                </DialogContent>
-              </Dialog>
-
-              {cashedOutPlayers.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <History /> Histórico de Cash Outs
-                    </CardTitle>
-                    <CardDescription>Jogadores que já saíram da mesa.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {cashedOutPlayers.map((p) => {
-                      const balance = p.amountReceived - p.totalInvested;
-                      const pChipCounts = new Map(Object.entries(p.chipCounts).map(([k,v]) => [parseInt(k),v]));
-                      return (
-                        <div key={p.id} className="p-4 rounded-md border bg-muted/30">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-bold">{p.name}</h4>
-                              <p className="text-sm text-muted-foreground">
-                                Saiu às {new Date(p.cashedOutAt).toLocaleTimeString('pt-BR')}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-bold text-lg text-primary">
-                                {p.amountReceived.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </p>
-                              <p className={cn('text-sm font-bold', balance >= 0 ? 'text-green-400' : 'text-red-400')}>
-                                Balanço: {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </p>
-                            </div>
-                          </div>
-                          <Separator className="my-2" />
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                {playerForDetails && (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Transação</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          {sortedChips.map((chip) => (
+                            <TableHead key={chip.id} className="text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <ChipIcon color={chip.color} />
+                                <span className="whitespace-nowrap">
+                                  {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                              </div>
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {playerForDetails.transactions.map((trans) => (
+                          <TableRow key={trans.id}>
+                            <TableCell className="font-medium capitalize">
+                              {trans.type} #{trans.id}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {trans.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </TableCell>
                             {sortedChips.map((chip) => {
-                              const count = pChipCounts.get(chip.id) || 0;
-                              if (count === 0) return null;
+                              const tChip = trans.chips.find((c) => c.chipId === chip.id);
                               return (
-                                <div key={chip.id} className="flex items-center gap-1.5">
-                                  <ChipIcon color={chip.color} className="h-4 w-4" />
-                                  <span className="font-mono">{count}x</span>
-                                </div>
+                                <TableCell key={chip.id} className="text-center font-mono">
+                                  {tChip?.count || 0}
+                                </TableCell>
                               );
                             })}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                      <UiTableFooter>
+                        <TableRow className="bg-muted/50 hover:bg-muted font-bold">
+                          <TableCell colSpan={2} className="text-right">
+                            Total de Fichas
+                          </TableCell>
+                          {getPlayerTotalChips(playerForDetails).map((chip) => (
+                            <TableCell key={chip.chipId} className="text-center font-mono">
+                              {chip.count}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                        <TableRow className="bg-muted/80 hover:bg-muted font-bold">
+                          <TableCell colSpan={2} className="text-right">
+                            Valor Total Investido
+                          </TableCell>
+                          <TableCell colSpan={sortedChips.length + 1} className="text-left font-mono">
+                            {playerForDetails.transactions
+                              .reduce((acc, t) => acc + t.amount, 0)
+                              .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </TableCell>
+                        </TableRow>
+                      </UiTableFooter>
+                    </Table>
+
+                    <Separator className="my-4" />
+
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="rebuy-amount" className="text-right">
+                          Adicionar Valor (R$)
+                        </Label>
+                        <Input
+                          id="rebuy-amount"
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="Ex: 50"
+                          value={rebuyAmount}
+                          onChange={(e) => setRebuyAmount(e.target.value)}
+                          className="col-span-3"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        onClick={() =>
+                          handleOpenDistributionModal('rebuy', {
+                            playerId: playerForDetails.id,
+                            playerName: playerForDetails.name,
+                            amount: parseFloat(rebuyAmount),
+                          })
+                        }
+                      >
+                        Confirmar Adição
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            {cashedOutPlayers.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <History /> Histórico de Cash Outs
+                  </CardTitle>
+                  <CardDescription>Jogadores que já saíram da mesa.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {cashedOutPlayers.map((p) => {
+                    const balance = p.amountReceived - p.totalInvested;
+                    const pChipCounts = new Map(Object.entries(p.chipCounts).map(([k, v]) => [parseInt(k), v]));
+                    return (
+                      <div key={p.id} className="p-4 rounded-md border bg-muted/30">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-bold">{p.name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Saiu às {new Date(p.cashedOutAt).toLocaleTimeString('pt-BR')}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-lg text-primary">
+                              {p.amountReceived.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </p>
+                            <p className={cn('text-sm font-bold', balance >= 0 ? 'text-green-400' : 'text-red-400')}>
+                              Balanço: {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </p>
                           </div>
                         </div>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              )}
-            </main>
-          
+                        <Separator className="my-2" />
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                          {sortedChips.map((chip) => {
+                            const count = pChipCounts.get(chip.id) || 0;
+                            if (count === 0) return null;
+                            return (
+                              <div key={chip.id} className="flex items-center gap-1.5">
+                                <ChipIcon color={chip.color} className="h-4 w-4" />
+                                <span className="font-mono">{count}x</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
+          </main>
 
           <aside className="space-y-8 lg:col-start-3">
             <Card className="bg-secondary hidden lg:block">
@@ -1248,432 +1293,453 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
             </Card>
 
             {isAdmin && (
-                <>
+              <>
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                        <Palette /> Fichas do Jogo
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                        {sortedChips.map((chip) => (
-                            <div key={chip.id} className="flex items-center gap-2">
-                            <ChipIcon color={chip.color} />
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Palette /> Fichas do Jogo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {sortedChips.map((chip) => (
+                        <div key={chip.id} className="flex items-center gap-2">
+                          <ChipIcon color={chip.color} />
+                          <Input
+                            type="text"
+                            value={chip.name}
+                            onChange={(e) => {
+                              const updatedChips = chips.map((c) =>
+                                c.id === chip.id ? { ...c, name: e.target.value } : c
+                              );
+                              updateGame({ chips: updatedChips });
+                            }}
+                            className="w-24 flex-1"
+                          />
+                          <div className="flex items-center">
+                            <span className="mr-2 text-sm">R$</span>
                             <Input
-                                type="text"
-                                value={chip.name}
-                                onChange={(e) => {
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              value={chip.value}
+                              onChange={(e) => {
                                 const updatedChips = chips.map((c) =>
-                                    c.id === chip.id ? { ...c, name: e.target.value } : c
+                                  c.id === chip.id ? { ...c, value: parseFloat(e.target.value) || 0 } : c
                                 );
                                 updateGame({ chips: updatedChips });
-                                }}
-                                className="w-24 flex-1"
+                              }}
+                              className="w-20"
                             />
-                            <div className="flex items-center">
-                                <span className="mr-2 text-sm">R$</span>
-                                <Input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.01"
-                                value={chip.value}
-                                onChange={(e) => {
-                                    const updatedChips = chips.map((c) =>
-                                    c.id === chip.id ? { ...c, value: parseFloat(e.target.value) || 0 } : c
-                                    );
-                                    updateGame({ chips: updatedChips });
-                                }}
-                                className="w-20"
-                                />
-                            </div>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveChip(chip.id)}
-                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
-                            >
-                                <Trash2 className="h-4 w-4 text-red-500/80" />
-                            </Button>
-                            </div>
-                        ))}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveChip(chip.id)}
+                            disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500/80" />
+                          </Button>
                         </div>
-                    </CardContent>
-                    <CardFooter className="flex-col gap-2">
-                        <Dialog open={isAddChipOpen} onOpenChange={setIsAddChipOpen}>
-                        <DialogTrigger asChild>
-                            <Button
-                            variant="outline"
-                            className="w-full"
-                            >
-                            Adicionar Ficha
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                            <DialogTitle>Adicionar Nova Ficha</DialogTitle>
-                            <DialogDescription>Defina as propriedades da nova ficha para o jogo.</DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="chip-name" className="text-right">
-                                Nome
-                                </Label>
-                                <Input
-                                id="chip-name"
-                                value={newChip.name}
-                                onChange={(e) => setNewChip({ ...newChip, name: e.target.value })}
-                                className="col-span-3"
-                                />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="chip-value" className="text-right">
-                                Valor (R$)
-                                </Label>
-                                <Input
-                                id="chip-value"
-                                type="number"
-                                inputMode="decimal"
-                                value={newChip.value}
-                                onChange={(e) => setNewChip({ ...newChip, value: e.target.value })}
-                                className="col-span-3"
-                                />
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="chip-color" className="text-right">
-                                Cor
-                                </Label>
-                                <Input
-                                id="chip-color"
-                                type="color"
-                                value={newChip.color}
-                                onChange={(e) => setNewChip({ ...newChip, color: e.target.value })}
-                                className="col-span-3 h-10 p-1"
-                                />
-                            </div>
-                            </div>
-                            <DialogFooter>
-                            <Button onClick={handleAddChip}>Salvar Ficha</Button>
-                            </DialogFooter>
-                        </DialogContent>
-                        </Dialog>
-                        <Button
-                        variant="ghost"
-                        className="w-full"
-                        onClick={handleResetChips}
-                        disabled={players.length > 0 || cashedOutPlayers.length > 0}
-                        >
-                        Resetar Fichas
+                      ))}
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex-col gap-2">
+                    <Dialog open={isAddChipOpen} onOpenChange={setIsAddChipOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full">
+                          Adicionar Ficha
                         </Button>
-                    </CardFooter>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Adicionar Nova Ficha</DialogTitle>
+                          <DialogDescription>Defina as propriedades da nova ficha para o jogo.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="chip-name" className="text-right">
+                              Nome
+                            </Label>
+                            <Input
+                              id="chip-name"
+                              value={newChip.name}
+                              onChange={(e) => setNewChip({ ...newChip, name: e.target.value })}
+                              className="col-span-3"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="chip-value" className="text-right">
+                              Valor (R$)
+                            </Label>
+                            <Input
+                              id="chip-value"
+                              type="number"
+                              inputMode="decimal"
+                              value={newChip.value}
+                              onChange={(e) => setNewChip({ ...newChip, value: e.target.value })}
+                              className="col-span-3"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="chip-color" className="text-right">
+                              Cor
+                            </Label>
+                            <Input
+                              id="chip-color"
+                              type="color"
+                              value={newChip.color}
+                              onChange={(e) => setNewChip({ ...newChip, color: e.target.value })}
+                              className="col-span-3 h-10 p-1"
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button onClick={handleAddChip}>Salvar Ficha</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                    <Button
+                      variant="ghost"
+                      className="w-full"
+                      onClick={handleResetChips}
+                      disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                    >
+                      Resetar Fichas
+                    </Button>
+                  </CardFooter>
                 </Card>
 
                 <Card>
-                <CardHeader>
+                  <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                    <Calculator /> Acerto de Contas
+                      <Calculator /> Acerto de Contas
                     </CardTitle>
                     <CardDescription>
-                        Ao final do jogo, insira a contagem de fichas de cada jogador para calcular os resultados.
+                      Ao final do jogo, insira a contagem de fichas de cada jogador para calcular os resultados.
                     </CardDescription>
-                </CardHeader>
-                <CardContent>
+                  </CardHeader>
+                  <CardContent>
                     <p className="text-sm text-muted-foreground text-center">
-                    Clique no botão abaixo para iniciar o acerto de contas.
+                      Clique no botão abaixo para iniciar o acerto de contas.
                     </p>
-                </CardContent>
-                <CardFooter>
+                  </CardContent>
+                  <CardFooter>
                     <Dialog open={isSettlementOpen} onOpenChange={setIsSettlementOpen}>
-                    <DialogTrigger asChild>
+                      <DialogTrigger asChild>
                         <Button className="w-full" disabled={!isAdmin || players.length === 0}>
-                        Iniciar Acerto de Contas
+                          Iniciar Acerto de Contas
                         </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-[90vw] md:max-w-4xl lg:max-w-6xl h-[90vh]">
+                      </DialogTrigger>
+                      <DialogContent className="max-w-[90vw] md:max-w-4xl lg:max-w-6xl h-[90vh]">
                         <DialogHeader>
-                        <DialogTitle>Acerto de Contas Final</DialogTitle>
-                        <DialogDescription>
+                          <DialogTitle>Acerto de Contas Final</DialogTitle>
+                          <DialogDescription>
                             Insira a contagem final de fichas para cada jogador, gorjetas e rake. O sistema calculará os
                             valores.
-                        </DialogDescription>
+                          </DialogDescription>
                         </DialogHeader>
                         <div className="overflow-y-auto pr-4 -mr-4 h-full">
-                        <div className="p-4 rounded-md bg-muted/50 border border-border mb-6">
+                          <div className="p-4 rounded-md bg-muted/50 border border-border mb-6">
                             <h3 className="text-lg font-bold text-foreground mb-2">
-                            Total de Fichas em Jogo (Restantes)
+                              Total de Fichas em Jogo (Restantes)
                             </h3>
                             <div className="flex flex-wrap gap-x-6 gap-y-2">
-                            {settlementChipsInPlay.map(({ chip, count }) => (
+                              {settlementChipsInPlay.map(({ chip, count }) => (
                                 <div key={chip.id} className="flex items-center gap-2">
-                                <ChipIcon color={chip.color} />
-                                <span className="font-bold">{chip.name}:</span>
-                                <span className="font-mono text-muted-foreground">{count} fichas</span>
+                                  <ChipIcon color={chip.color} />
+                                  <span className="font-bold">{chip.name}:</span>
+                                  <span className="font-mono text-muted-foreground">{count} fichas</span>
                                 </div>
-                            ))}
+                              ))}
                             </div>
-                        </div>
+                          </div>
 
-                        <h3 className="text-xl font-bold mb-2">Jogadores</h3>
-                        <Table>
+                          <h3 className="text-xl font-bold mb-2">Jogadores</h3>
+                          <Table>
                             <TableHeader>
-                            <TableRow>
+                              <TableRow>
                                 <TableHead className="w-[150px]">Jogador</TableHead>
                                 {sortedChips.map((chip) => (
-                                <TableHead key={chip.id} className="text-center w-[100px]">
+                                  <TableHead key={chip.id} className="text-center w-[100px]">
                                     <div className="flex items-center justify-center gap-2">
-                                    <ChipIcon color={chip.color} />
-                                    <span>{chip.value.toFixed(2)}</span>
+                                      <ChipIcon color={chip.color} />
+                                      <span>{chip.value.toFixed(2)}</span>
                                     </div>
-                                </TableHead>
+                                  </TableHead>
                                 ))}
                                 <TableHead className="text-right">Investido (R$)</TableHead>
                                 <TableHead className="text-right font-bold text-foreground">
-                                Valor Contado (R$)
+                                  Valor Contado (R$)
                                 </TableHead>
-                            </TableRow>
+                              </TableRow>
                             </TableHeader>
                             <TableBody>
-                            {players.map((player) => {
+                              {players.map((player) => {
                                 const { totalInvested, finalValue } = getPlayerSettlementData(player);
-                                const pFinalChips = new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
+                                const pFinalChips = new Map(
+                                  Object.entries(player.finalChipCounts).map(([k, v]) => [parseInt(k), v])
+                                );
 
                                 return (
-                                <TableRow key={player.id}>
+                                  <TableRow key={player.id}>
                                     <TableCell className="font-medium">{player.name}</TableCell>
                                     {sortedChips.map((chip) => (
-                                    <TableCell key={chip.id}>
+                                      <TableCell key={chip.id}>
                                         <Input
-                                        type="number"
-                                        inputMode="decimal"
-                                        className="w-16 text-center font-mono mx-auto"
-                                        min="0"
-                                        value={pFinalChips.get(chip.id) || ''}
-                                        onChange={(e) =>
-                                            handlePlayerChipCountChange(player.id, chip.id, parseInt(e.target.value) || 0)
-                                        }
+                                          type="number"
+                                          inputMode="decimal"
+                                          className="w-16 text-center font-mono mx-auto"
+                                          min="0"
+                                          value={pFinalChips.get(chip.id) || ''}
+                                          onChange={(e) =>
+                                            handlePlayerChipCountChange(
+                                              player.id,
+                                              chip.id,
+                                              parseInt(e.target.value) || 0
+                                            )
+                                          }
                                         />
-                                    </TableCell>
+                                      </TableCell>
                                     ))}
                                     <TableCell className="text-right font-mono">
-                                    {totalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                      {totalInvested.toLocaleString('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL',
+                                      })}
                                     </TableCell>
                                     <TableCell className="text-right font-mono font-bold text-foreground">
-                                    {finalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                      {finalValue.toLocaleString('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL',
+                                      })}
                                     </TableCell>
-                                </TableRow>
+                                  </TableRow>
                                 );
-                            })}
+                              })}
                             </TableBody>
-                        </Table>
+                          </Table>
 
-                        <Separator className="my-6" />
+                          <Separator className="my-6" />
 
-                        <div className="grid md:grid-cols-2 gap-8">
+                          <div className="grid md:grid-cols-2 gap-8">
                             <div>
-                            <h3 className="text-xl font-bold mb-2">Gorjeta do Croupier</h3>
-                            <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                              <h3 className="text-xl font-bold mb-2">Gorjeta do Croupier</h3>
+                              <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
                                 {sortedChips.map((chip) => (
-                                <div key={`tips-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
+                                  <div key={`tips-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
                                     <Label
-                                    htmlFor={`tips-chip-${chip.id}`}
-                                    className="text-sm flex items-center gap-2"
+                                      htmlFor={`tips-chip-${chip.id}`}
+                                      className="text-sm flex items-center gap-2"
                                     >
-                                    <ChipIcon color={chip.color} />
-                                    Fichas de {chip.value.toLocaleString('pt-BR', {
+                                      <ChipIcon color={chip.color} />
+                                      Fichas de{' '}
+                                      {chip.value.toLocaleString('pt-BR', {
                                         style: 'currency',
                                         currency: 'BRL',
-                                    })}
+                                      })}
                                     </Label>
                                     <Input
-                                    id={`tips-chip-${chip.id}`}
-                                    type="number"
-                                    inputMode="decimal"
-                                    min="0"
-                                    placeholder="Qtd."
-                                    className="font-mono text-center"
-                                    value={croupierTipsChipCounts.get(chip.id) || ''}
-                                    onChange={(e) =>
+                                      id={`tips-chip-${chip.id}`}
+                                      type="number"
+                                      inputMode="decimal"
+                                      min="0"
+                                      placeholder="Qtd."
+                                      className="font-mono text-center"
+                                      value={croupierTipsChipCounts.get(chip.id) || ''}
+                                      onChange={(e) =>
                                         handleTipRakeChipCountChange('tips', chip.id, parseInt(e.target.value) || 0)
-                                    }
+                                      }
                                     />
-                                </div>
+                                  </div>
                                 ))}
                                 <Separator className="my-2" />
                                 <div className="flex justify-between items-center font-bold">
-                                <span>Total Gorjeta:</span>
-                                <span>
+                                  <span>Total Gorjeta:</span>
+                                  <span>
                                     {croupierTipsValue.toLocaleString('pt-BR', {
-                                    style: 'currency',
-                                    currency: 'BRL',
+                                      style: 'currency',
+                                      currency: 'BRL',
                                     })}
-                                </span>
+                                  </span>
                                 </div>
-                            </div>
+                              </div>
                             </div>
                             <div>
-                            <h3 className="text-xl font-bold mb-2">Rake da Casa</h3>
-                            <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                              <h3 className="text-xl font-bold mb-2">Rake da Casa</h3>
+                              <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
                                 {sortedChips.map((chip) => (
-                                <div key={`rake-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
+                                  <div key={`rake-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
                                     <Label
-                                    htmlFor={`rake-chip-${chip.id}`}
-                                    className="text-sm flex items-center gap-2"
+                                      htmlFor={`rake-chip-${chip.id}`}
+                                      className="text-sm flex items-center gap-2"
                                     >
-                                    <ChipIcon color={chip.color} />
-                                    Fichas de {chip.value.toLocaleString('pt-BR', {
+                                      <ChipIcon color={chip.color} />
+                                      Fichas de{' '}
+                                      {chip.value.toLocaleString('pt-BR', {
                                         style: 'currency',
                                         currency: 'BRL',
-                                    })}
+                                      })}
                                     </Label>
                                     <Input
-                                    id={`rake-chip-${chip.id}`}
-                                    type="number"
-                                    inputMode="decimal"
-                                    min="0"
-                                    placeholder="Qtd."
-                                    className="font-mono text-center"
-                                    value={rakeChipCounts.get(chip.id) || ''}
-                                    onChange={(e) =>
+                                      id={`rake-chip-${chip.id}`}
+                                      type="number"
+                                      inputMode="decimal"
+                                      min="0"
+                                      placeholder="Qtd."
+                                      className="font-mono text-center"
+                                      value={rakeChipCounts.get(chip.id) || ''}
+                                      onChange={(e) =>
                                         handleTipRakeChipCountChange('rake', chip.id, parseInt(e.target.value) || 0)
-                                    }
+                                      }
                                     />
-                                </div>
+                                  </div>
                                 ))}
                                 <Separator className="my-2" />
                                 <div className="flex justify-between items-center font-bold">
-                                <span>Total Rake:</span>
-                                <span>
+                                  <span>Total Rake:</span>
+                                  <span>
                                     {rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </span>
+                                  </span>
                                 </div>
+                              </div>
                             </div>
-                            </div>
-                        </div>
+                          </div>
 
-                        <Separator className="my-6" />
+                          <Separator className="my-6" />
 
-                        {Math.abs(settlementDifference) < 0.01 ? (
+                          {Math.abs(settlementDifference) < 0.01 ? (
                             <div className="p-4 rounded-md bg-green-900/50 border border-green-500">
-                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
                                 <CheckCircle2 className="text-green-400" />
                                 <h3 className="text-lg font-bold text-green-300">Contas Batem!</h3>
-                            </div>
-                            <p className="text-green-400/80 mt-1">
+                              </div>
+                              <p className="text-green-400/80 mt-1">
                                 O valor total (fichas + gorjeta + rake) corresponde ao valor total que entrou na mesa.
-                            </p>
-                            <div className="mt-4">
+                              </p>
+                              <div className="mt-4">
                                 <h4 className="font-bold mb-2 text-green-300">Pagamentos Finais:</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
-                                <div>
+                                  <div>
                                     <p className="font-bold border-b pb-1 mb-2">Valor a Receber</p>
                                     <ul className="space-y-1 list-disc list-inside">
-                                    {players.map((player) => {
+                                      {players.map((player) => {
                                         const { finalValue } = getPlayerSettlementData(player);
                                         return (
-                                        <li key={player.id}>
+                                          <li key={player.id}>
                                             {player.name} recebe{' '}
                                             <span className="font-bold text-green-400">
-                                            {finalValue.toLocaleString('pt-BR', {
+                                              {finalValue.toLocaleString('pt-BR', {
                                                 style: 'currency',
                                                 currency: 'BRL',
-                                            })}
+                                              })}
                                             </span>
                                             .
-                                        </li>
+                                          </li>
                                         );
-                                    })}
+                                      })}
                                     </ul>
-                                </div>
-                                <div>
+                                  </div>
+                                  <div>
                                     <p className="font-bold border-b pb-1 mb-2">Lucro / Prejuízo</p>
                                     <ul className="space-y-1 list-disc list-inside">
-                                    {players.map((player) => {
+                                      {players.map((player) => {
                                         const { balance } = getPlayerSettlementData(player);
                                         return (
-                                        <li key={player.id}>
+                                          <li key={player.id}>
                                             {player.name}:{' '}
                                             <span
-                                            className={cn(
+                                              className={cn(
                                                 'font-bold',
                                                 balance >= 0 ? 'text-green-400' : 'text-red-400'
-                                            )}
+                                              )}
                                             >
-                                            {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                              {balance.toLocaleString('pt-BR', {
+                                                style: 'currency',
+                                                currency: 'BRL',
+                                              })}
                                             </span>
-                                        </li>
+                                          </li>
                                         );
-                                    })}
+                                      })}
                                     </ul>
+                                  </div>
                                 </div>
-                                </div>
+                              </div>
                             </div>
-                            </div>
-                        ) : (
+                          ) : (
                             <div className="p-4 rounded-md bg-red-900/50 border border-red-500">
-                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
                                 <AlertCircle className="text-red-400" />
                                 <h3 className="text-lg font-bold text-red-300">Erro na Contagem!</h3>
-                            </div>
-                            <p className="text-red-400/80 mt-1">
+                              </div>
+                              <p className="text-red-400/80 mt-1">
                                 A soma das fichas, gorjeta e rake não corresponde ao total de buy-ins. Verifique a contagem
                                 de fichas de cada jogador.
-                            </p>
+                              </p>
                             </div>
-                        )}
+                          )}
                         </div>
                         <DialogFooter className="mt-4 gap-2 sm:gap-0">
-                        <div className="flex-1 text-center md:text-right font-mono bg-muted p-2 rounded-md text-xs">
+                          <div className="flex-1 text-center md:text-right font-mono bg-muted p-2 rounded-md text-xs">
                             TOTAL ENTRADO:{' '}
                             <span className="font-bold">
-                            {totalSessionBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {totalSessionBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </span>
                             <br />
                             TOTAL CONTADO:{' '}
                             <span className="font-bold">
-                            {totalSettlementValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {totalSettlementValue.toLocaleString('pt-BR', {
+                                style: 'currency',
+                                currency: 'BRL',
+                              })}
                             </span>{' '}
                             (+
-                            {croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Gorjeta)
-                            (+{rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
+                            {croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}{' '}
+                            Gorjeta) (+
+                            {rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
                             <br />
                             Diferença:{' '}
                             <span
-                            className={cn(
+                              className={cn(
                                 'font-bold',
                                 Math.abs(settlementDifference) >= 0.01 ? 'text-destructive' : 'text-green-400'
-                            )}
+                              )}
                             >
-                            {settlementDifference.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {settlementDifference.toLocaleString('pt-BR', {
+                                style: 'currency',
+                                currency: 'BRL',
+                              })}
                             </span>
-                        </div>
-                        <Dialog>
+                          </div>
+                          <Dialog>
                             <DialogTrigger asChild>
-                            <Button variant="destructive">Resetar e Finalizar Sessão</Button>
+                              <Button variant="destructive">Resetar e Finalizar Sessão</Button>
                             </DialogTrigger>
                             <DialogContent className="max-w-md">
-                            <DialogHeader>
+                              <DialogHeader>
                                 <DialogTitle>Confirmar Finalização</DialogTitle>
                                 <DialogDescription>
-                                Tem certeza que deseja finalizar a sessão? A sala e todos os seus dados serão apagados
-                                permanentemente. Esta ação não pode ser desfeita.
+                                  Tem certeza que deseja finalizar a sessão? A sala e todos os seus dados serão apagados
+                                  permanentemente. Esta ação não pode ser desfeita.
                                 </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter>
+                              </DialogHeader>
+                              <DialogFooter>
                                 <DialogClose asChild>
-                                <Button variant="outline">Cancelar</Button>
+                                  <Button variant="outline">Cancelar</Button>
                                 </DialogClose>
                                 <Button variant="destructive" onClick={resetGame}>
-                                Sim, Finalizar
+                                  Sim, Finalizar
                                 </Button>
-                            </DialogFooter>
+                              </DialogFooter>
                             </DialogContent>
-                        </Dialog>
+                          </Dialog>
                         </DialogFooter>
-                    </DialogContent>
+                      </DialogContent>
                     </Dialog>
-                </CardFooter>
+                  </CardFooter>
                 </Card>
-                </>
+              </>
             )}
           </aside>
         </div>

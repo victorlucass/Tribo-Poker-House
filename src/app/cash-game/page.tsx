@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, LogIn, PlusCircle } from 'lucide-react';
+import { ArrowLeft, LogIn, LogOut, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import type { JoinRequest } from '@/lib/types';
-
+import { getAuth, signOut } from 'firebase/auth';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Helper to generate a random ID
 const generateId = () => {
@@ -30,16 +31,19 @@ export default function CashGameLandingPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading: isAuthLoading } = useAuth();
   const [newGameName, setNewGameName] = useState('');
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const auth = getAuth();
 
-  if (!user || !firestore) {
-    // Or a loading spinner
-    return null;
-  }
+  const handleLogout = () => {
+    signOut(auth).then(() => {
+      toast({ title: 'Logout efetuado com sucesso.' });
+      router.push('/login');
+    });
+  };
 
   const handleCreateGame = async () => {
     if (!newGameName.trim()) {
@@ -47,15 +51,15 @@ export default function CashGameLandingPage() {
       return;
     }
     if (!user) {
-       toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para criar uma sala.' });
-       return;
+      toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para criar uma sala.' });
+      return;
     }
     setIsCreating(true);
 
     try {
       const gameId = generateId();
-      const gameRef = doc(firestore, 'cashGames', gameId);
-      
+      const gameRef = doc(firestore!, 'cashGames', gameId);
+
       await setDoc(gameRef, {
         id: gameId,
         name: newGameName,
@@ -71,9 +75,8 @@ export default function CashGameLandingPage() {
 
       toast({ title: 'Sala Criada!', description: `A sala "${newGameName}" foi criada com sucesso.` });
       router.push(`/cash-game/${gameId}`);
-
     } catch (error) {
-      console.error("Error creating game: ", error);
+      console.error('Error creating game: ', error);
       toast({ variant: 'destructive', title: 'Erro ao Criar Sala', description: 'Não foi possível criar a sala. Tente novamente.' });
       setIsCreating(false);
     }
@@ -84,100 +87,115 @@ export default function CashGameLandingPage() {
       toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, insira o ID da sala.' });
       return;
     }
-    if (!user) {
-       toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para entrar em uma sala.' });
-       return;
+    if (!user || !firestore) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para entrar em uma sala.' });
+      return;
     }
     setIsJoining(true);
     const gameId = joinGameId.toUpperCase();
 
     try {
-        const gameRef = doc(firestore, 'cashGames', gameId);
-        const docSnap = await getDoc(gameRef);
+      const gameRef = doc(firestore, 'cashGames', gameId);
+      const docSnap = await getDoc(gameRef);
 
-        if (docSnap.exists()) {
-            if(isAdmin) {
-                 router.push(`/cash-game/${gameId}`);
-                 return;
-            }
-
-            const gameData = docSnap.data();
-            const alreadyPlayer = gameData.players.some((p: any) => p.id === user.uid);
-            const alreadyRequested = gameData.requests.some((r: any) => r.userId === user.uid);
-
-            if (alreadyPlayer) {
-                toast({ title: 'Você já está na mesa', description: 'Redirecionando para a sala...' });
-                router.push(`/cash-game/${gameId}`);
-                return;
-            }
-
-            if (alreadyRequested) {
-                 toast({ variant: 'destructive', title: 'Solicitação Pendente', description: 'Você já pediu para entrar. Aguarde a aprovação do admin.' });
-                 setIsJoining(false);
-                 return;
-            }
-            
-            const newRequest: JoinRequest = {
-                userId: user.uid,
-                userName: user.nickname,
-                status: 'pending',
-                requestedAt: new Date().toISOString()
-            };
-
-            await updateDoc(gameRef, {
-                requests: arrayUnion(newRequest)
-            });
-
-            toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado ao admin.' });
-            router.push(`/cash-game/${gameId}`);
-
-        } else {
-            toast({ variant: 'destructive', title: 'Sala não encontrada', description: 'Nenhuma sala encontrada com este ID. Verifique o código e tente novamente.' });
+      if (docSnap.exists()) {
+        if (isAdmin) {
+          router.push(`/cash-game/${gameId}`);
+          return;
         }
+
+        const gameData = docSnap.data();
+        const alreadyPlayer = gameData.players.some((p: any) => p.id === user.uid);
+        const alreadyCashedOut = gameData.cashedOutPlayers.some((p: any) => p.id === user.uid);
+        const alreadyRequested = gameData.requests.some((r: any) => r.userId === user.uid);
+
+        if (alreadyPlayer || alreadyCashedOut) {
+          toast({ title: 'Você já faz parte desta sala', description: 'Redirecionando...' });
+          router.push(`/cash-game/${gameId}`);
+          return;
+        }
+
+        if (alreadyRequested) {
+          toast({ variant: 'destructive', title: 'Solicitação Pendente', description: 'Você já pediu para entrar. Aguarde a aprovação do admin.' });
+          setIsJoining(false);
+          return;
+        }
+
+        const newRequest: JoinRequest = {
+          userId: user.uid,
+          userName: user.nickname,
+          status: 'pending',
+          requestedAt: new Date().toISOString(),
+        };
+
+        await updateDoc(gameRef, {
+          requests: arrayUnion(newRequest),
+        });
+
+        toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado ao admin.' });
+        setJoinGameId('');
+      } else {
+        toast({ variant: 'destructive', title: 'Sala não encontrada', description: 'Nenhuma sala encontrada com este ID. Verifique o código e tente novamente.' });
+      }
     } catch (error) {
-        console.error("Error joining game: ", error);
-        toast({ variant: 'destructive', title: 'Erro ao Entrar na Sala', description: 'Ocorreu um erro. Tente novamente.' });
+      console.error('Error joining game: ', error);
+      toast({ variant: 'destructive', title: 'Erro ao Entrar na Sala', description: 'Ocorreu um erro. Tente novamente.' });
     } finally {
-        setIsJoining(false);
+      setIsJoining(false);
     }
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-8">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4">
-       <div className="absolute top-8 left-8">
-            <Button asChild variant="outline" size="icon">
-                <Link href="/">
-                <ArrowLeft />
-                </Link>
-            </Button>
-        </div>
+      <div className="absolute top-8 left-8">
+        <Button asChild variant="outline" size="icon">
+          <Link href="/">
+            <ArrowLeft />
+          </Link>
+        </Button>
+      </div>
+      <div className="absolute top-8 right-8">
+        <Button variant="outline" onClick={handleLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Sair
+        </Button>
+      </div>
       <div className="w-full max-w-md space-y-8">
         {isAdmin && (
-            <Card>
+          <Card>
             <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-accent"><PlusCircle /> Criar Nova Sala</CardTitle>
-                <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-accent">
+                <PlusCircle /> Criar Nova Sala
+              </CardTitle>
+              <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Input
-                placeholder="Nome da Sala (Ex: Jogo de Terça)"
-                value={newGameName}
-                onChange={(e) => setNewGameName(e.target.value)}
-                disabled={isCreating}
-                />
+              <Input placeholder="Nome da Sala (Ex: Jogo de Terça)" value={newGameName} onChange={(e) => setNewGameName(e.target.value)} disabled={isCreating} />
             </CardContent>
             <CardFooter>
-                <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
+              <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
                 {isCreating ? 'Criando...' : 'Criar Sala'}
-                </Button>
+              </Button>
             </CardFooter>
-            </Card>
+          </Card>
         )}
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><LogIn /> Entrar em uma Sala</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <LogIn /> Entrar em uma Sala
+            </CardTitle>
             <CardDescription>Já tem um código? Insira-o abaixo para entrar em uma sala existente.</CardDescription>
           </CardHeader>
           <CardContent>
