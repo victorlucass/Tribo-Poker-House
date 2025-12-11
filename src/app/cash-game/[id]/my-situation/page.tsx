@@ -70,7 +70,7 @@ export default function MySituationPage() {
   if (authLoading || gameStatus === 'loading') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
-        <Skeleton className="h-[600px] w-full max-w-2xl" />
+        <Skeleton className="h-[600px] w-full max-w-lg" />
       </div>
     );
   }
@@ -95,7 +95,7 @@ export default function MySituationPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center p-4 sm:p-8">
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-lg">
         <header className="mb-8 flex items-center gap-4">
             <Button asChild variant="outline" size="icon">
                 <Link href={`/cash-game/${gameId}`}>
@@ -103,17 +103,17 @@ export default function MySituationPage() {
                 </Link>
             </Button>
             <div>
-              <h1 className="font-headline text-3xl font-bold text-accent">Minha Situação na Mesa</h1>
-              <p className="text-muted-foreground">Calcule seu balanço atual inserindo a quantidade de fichas que você tem.</p>
+              <h1 className="font-headline text-3xl font-bold text-accent">Minha Situação</h1>
+              <p className="text-muted-foreground">Calcule seu balanço atual inserindo suas fichas.</p>
             </div>
         </header>
 
-        <main className="grid md:grid-cols-2 gap-8">
+        <main className="space-y-8">
           <Card>
             <CardHeader>
                 <CardTitle>Meu Investimento</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-1 text-sm pr-4 -mr-4">
+            <CardContent className="space-y-2 text-sm">
                 {player.transactions.map(t => (
                    <div key={t.id} className="flex justify-between items-center">
                       <span className="capitalize text-muted-foreground">{t.type} #{t.id}</span>
@@ -132,18 +132,18 @@ export default function MySituationPage() {
              <CardHeader>
                 <CardTitle>Minhas Fichas Atuais</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 pr-4 -mr-4">
+            <CardContent className="space-y-4">
                 {sortedChips.map((chip) => (
                   <div key={chip.id} className="grid grid-cols-3 items-center gap-4">
                     <Label htmlFor={`my-chip-${chip.id}`} className="text-right flex items-center justify-end gap-2 text-sm">
                       <ChipIcon color={chip.color} />
-                      Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      <span className="truncate">Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                     </Label>
                     <Input
                       id={`my-chip-${chip.id}`}
                       type="number"
                       inputMode="decimal"
-                      className="col-span-2"
+                      className="col-span-2 font-mono text-center"
                       min="0"
                       placeholder="Quantidade"
                       value={myChipCounts.get(chip.id) || ''}
@@ -156,10 +156,10 @@ export default function MySituationPage() {
         </main>
         
         <footer className="mt-8">
-            <Card className="bg-secondary">
-                <CardContent className="p-6 space-y-4 text-lg">
-                    <div className="flex justify-between items-center font-bold">
-                       <Label>Valor Atual em Fichas:</Label>
+            <Card className="bg-secondary/50 border-primary shadow-primary/10 shadow-lg">
+                <CardContent className="p-6 space-y-4">
+                    <div className="flex justify-between items-center font-bold text-lg">
+                       <Label>Valor em Fichas:</Label>
                        <span className="font-mono text-primary">{myCurrentChipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                     </div>
                      <Separator />
