@@ -8,6 +8,7 @@ import type {
   CashGamePlayer as Player,
   CashedOutPlayer,
   PlayerTransaction,
+  JoinRequest
 } from '@/lib/types';
 import {
   Card,
@@ -53,6 +54,8 @@ import {
   Shuffle,
   Copy,
   Lock,
+  Check,
+  X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -62,7 +65,7 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc, arrayRemove, arrayUnion, getDoc } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -242,16 +245,22 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const [transactionDetails, setTransactionDetails] = useState<{
-    type: 'buy-in' | 'rebuy';
+    type: 'buy-in' | 'rebuy' | 'approve';
     amount: number;
     playerId?: string;
     playerName?: string;
+    request?: JoinRequest;
   } | null>(null);
   const [manualChipCounts, setManualChipCounts] = useState<Map<number, number>>(new Map());
 
   const [isSettlementOpen, setIsSettlementOpen] = useState(false);
   const [croupierTipsChipCounts, setCroupierTipsChipCounts] = useState<Map<number, number>>(new Map());
   const [rakeChipCounts, setRakeChipCounts] = useState<Map<number, number>>(new Map());
+
+  // State for approving a player
+  const [approvingPlayer, setApprovingPlayer] = useState<JoinRequest | null>(null);
+  const [approvalBuyIn, setApprovalBuyIn] = useState('');
+
 
   const sortedChips = useMemo(() => [...chips].sort((a, b) => a.value - b.value), [chips]);
 
@@ -278,25 +287,8 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     toast({ title: 'Posições Definidas!', description: `O dealer é ${dealer?.name}.` });
   };
   
-  const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy', playerId?: string, playerName?: string) => {
-    let amount: number;
-    let details: { type: 'buy-in' | 'rebuy'; amount: number; playerId?: string; playerName?: string };
-
-    if (type === 'buy-in') {
-      if (!newPlayerName || !newPlayerBuyIn) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'Preencha o nome e o valor de buy-in.' });
-        return;
-      }
-      amount = parseFloat(newPlayerBuyIn);
-      details = { type: 'buy-in', amount, playerId: newPlayerName, playerName: newPlayerName }; // Use name as temporary ID
-    } else {
-      if (!playerForDetails || !rebuyAmount) {
-        toast({ variant: 'destructive', title: 'Erro', description: 'Selecione um jogador e insira um valor.' });
-        return;
-      }
-      amount = parseFloat(rebuyAmount);
-      details = { type: 'rebuy', amount, playerId: playerForDetails.id, playerName: playerForDetails.name };
-    }
+  const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy' | 'approve', details: { playerId?: string; playerName?: string; amount: number; request?: JoinRequest }) => {
+    const { amount } = details;
 
     if (isNaN(amount) || amount <= 0) {
       toast({ variant: 'destructive', title: 'Valor Inválido', description: 'O valor deve ser um número positivo.' });
@@ -313,7 +305,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     suggestedDistribution.forEach((c) => chipMap.set(c.chipId, c.count));
 
     setManualChipCounts(chipMap);
-    setTransactionDetails(details);
+    setTransactionDetails({ type, ...details });
     setIsDistributionModalOpen(true);
   };
 
@@ -329,88 +321,136 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     }, 0);
   }, [manualChipCounts, sortedChips]);
 
-  const confirmTransaction = () => {
-    if (!transactionDetails) return;
-
-    const { type, amount, playerId, playerName } = transactionDetails;
-
+  const confirmTransaction = async () => {
+    if (!transactionDetails || !gameRef) return;
+  
+    const { type, amount, playerId, playerName, request } = transactionDetails;
+  
     const chipDistribution = sortedChips.map((chip) => ({
       chipId: chip.id,
       count: manualChipCounts.get(chip.id) || 0,
     }));
-
+  
     if (Math.abs(distributedValue - amount) > 0.01) {
-      toast({ variant: 'destructive', title: 'Valores não batem', description: 'O valor distribuído nas fichas não corresponde ao valor da transação.' });
+      toast({
+        variant: 'destructive',
+        title: 'Valores não batem',
+        description: 'O valor distribuído nas fichas não corresponde ao valor da transação.',
+      });
       return;
     }
-
+    
+    // Fetch the latest game data to avoid race conditions
+    const gameDoc = await getDoc(gameRef);
+    if (!gameDoc.exists()) {
+        toast({ variant: 'destructive', title: 'Erro', description: 'A sala não existe mais.' });
+        return;
+    }
+    const currentGameData = gameDoc.data() as CashGame;
+    const currentPlayers = currentGameData.players || [];
+    const currentRequests = currentGameData.requests || [];
+  
+    let seat: number | undefined = undefined;
+    if (currentGameData.positionsSet) {
+      const occupiedSeats = new Set(currentPlayers.map((p) => p.seat));
+      for (let i = 1; i <= 10; i++) {
+        if (!occupiedSeats.has(i)) {
+          seat = i;
+          break;
+        }
+      }
+      if (seat === undefined) {
+        toast({ variant: 'destructive', title: 'Mesa Cheia', description: 'Não há assentos disponíveis.' });
+        return;
+      }
+    }
+  
+    const newPlayer: Player = {
+      id: playerId || playerName!,
+      name: playerName!,
+      transactions: [
+        {
+          id: 1,
+          type: 'buy-in',
+          amount: amount,
+          chips: chipDistribution,
+        },
+      ],
+      finalChipCounts: {},
+      seat: seat ?? null,
+      card: null,
+    };
+  
     if (type === 'buy-in') {
-      let seat: number | undefined = undefined;
+      let updatedPlayers = [...currentPlayers, newPlayer];
       if (positionsSet) {
-        const occupiedSeats = new Set(players.map((p) => p.seat));
-        for (let i = 1; i <= 10; i++) {
-          if (!occupiedSeats.has(i)) {
-            seat = i;
-            break;
-          }
-        }
-        if (seat === undefined) {
-          toast({ variant: 'destructive', title: 'Mesa Cheia', description: 'Não há assentos disponíveis.' });
-          return;
-        }
+        updatedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
       }
-      
-      const newPlayer: Player = {
-        id: playerId!,
-        name: playerName!,
-        transactions: [
-          {
-            id: 1,
-            type: 'buy-in',
-            amount: amount,
-            chips: chipDistribution,
-          },
-        ],
-        finalChipCounts: {},
-        seat: seat ?? null,
-        card: null,
-      };
-      
-      const newPlayers = [...players, newPlayer];
-      if (positionsSet) {
-        newPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
-      }
-      updateGame({ 
-        players: newPlayers,
-        requests: requests.filter(r => r.userId !== playerId)
-      });
+      updateGame({ players: updatedPlayers });
       toast({ title: 'Jogador Adicionado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
       setNewPlayerName('');
       setNewPlayerBuyIn('');
-    } else {
+    } else if (type === 'approve' && request) {
+      let updatedPlayers = [...currentPlayers, newPlayer];
+       if (positionsSet) {
+        updatedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
+      }
+      const updatedRequests = currentRequests.filter(r => r.userId !== request.userId);
+  
+      updateGame({
+        players: updatedPlayers,
+        requests: updatedRequests
+      });
+      toast({ title: 'Jogador Aprovado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
+  
+    } else { // rebuy
       const newTransaction: PlayerTransaction = {
         id: (playerForDetails!.transactions.length > 0 ? Math.max(...playerForDetails!.transactions.map((t) => t.id)) : 0) + 1,
         type: 'rebuy',
         amount,
         chips: chipDistribution,
       };
-
-      const updatedPlayers = players.map((p) => {
+  
+      const updatedPlayers = currentPlayers.map((p) => {
         if (p.id === playerId) {
           return { ...p, transactions: [...p.transactions, newTransaction] };
         }
         return p;
       });
       updateGame({ players: updatedPlayers });
-
+  
       setPlayerForDetails((prev) => (prev ? { ...prev, transactions: [...prev.transactions, newTransaction] } : null));
       toast({ title: 'Transação Concluída!', description: `R$${amount.toFixed(2)} adicionado para ${playerName}.` });
       setRebuyAmount('');
     }
-
+  
     setIsDistributionModalOpen(false);
     setTransactionDetails(null);
+    setApprovingPlayer(null);
+    setApprovalBuyIn('');
   };
+
+  const handleApproveRequest = (req: JoinRequest) => {
+    if (!approvalBuyIn) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Insira um valor de buy-in para aprovar o jogador.' });
+      return;
+    }
+    const amount = parseFloat(approvalBuyIn);
+    handleOpenDistributionModal('approve', {
+      playerId: req.userId,
+      playerName: req.userName,
+      amount,
+      request: req,
+    });
+  };
+
+  const handleDeclineRequest = (request: JoinRequest) => {
+    updateGame({
+      requests: arrayRemove(request)
+    });
+    toast({ title: 'Solicitação Recusada', description: `O pedido de ${request.userName} foi recusado.` });
+  };
+
 
   const removePlayer = (id: string) => {
     updateGame({
@@ -790,7 +830,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                   <Card>
                   <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                      <UserPlus /> Adicionar Jogador
+                      <UserPlus /> Adicionar Jogador Manualmente
                       </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -807,13 +847,84 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                           value={newPlayerBuyIn}
                           onChange={(e) => setNewPlayerBuyIn(e.target.value)}
                       />
-                      <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto">
+                      <Button onClick={() => {
+                        if (!newPlayerName || !newPlayerBuyIn) {
+                            toast({ variant: 'destructive', title: 'Erro', description: 'Preencha o nome e o valor de buy-in.' });
+                            return;
+                        }
+                         handleOpenDistributionModal('buy-in', {
+                            playerName: newPlayerName,
+                            amount: parseFloat(newPlayerBuyIn)
+                         });
+                       }} className="w-full md:w-auto">
                           <PlusCircle className="mr-2" />
                           Adicionar
                       </Button>
                       </div>
                   </CardContent>
                   </Card>
+              )}
+
+              {isAdmin && requests.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-primary">
+                      <Lock /> Solicitações Pendentes
+                    </CardTitle>
+                    <CardDescription>Aprove ou recuse os jogadores que pediram para entrar na sala.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {requests.map((req) => (
+                      <div key={req.userId} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                        <div>
+                          <p className="font-semibold">{req.userName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Pedido às {new Date(req.requestedAt).toLocaleTimeString('pt-BR')}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                               <Button size="icon" variant="outline" className="text-green-400 border-green-400/50 hover:bg-green-400/10 hover:text-green-300" onClick={() => setApprovingPlayer(req)}>
+                                <Check className="h-5 w-5" />
+                              </Button>
+                            </DialogTrigger>
+                             <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Aprovar {req.userName}?</DialogTitle>
+                                  <DialogDescription>
+                                    Insira o valor do buy-in para adicionar o jogador à mesa.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="py-4">
+                                  <Label htmlFor="approval-buy-in">Valor do Buy-in (R$)</Label>
+                                  <Input
+                                    id="approval-buy-in"
+                                    type="number"
+                                    inputMode="decimal"
+                                    placeholder="Ex: 50.00"
+                                    value={approvalBuyIn}
+                                    onChange={(e) => setApprovalBuyIn(e.target.value)}
+                                  />
+                                </div>
+                                <DialogFooter>
+                                   <DialogClose asChild>
+                                    <Button variant="outline">Cancelar</Button>
+                                  </DialogClose>
+                                  <Button onClick={() => handleApproveRequest(req)} disabled={!approvalBuyIn}>
+                                    Confirmar e Distribuir Fichas
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                          </Dialog>
+                          <Button size="icon" variant="destructive" onClick={() => handleDeclineRequest(req)}>
+                            <X className="h-5 w-5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
               )}
 
               {positionsSet && (
@@ -1058,7 +1169,11 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button onClick={() => handleOpenDistributionModal('rebuy')}>Confirmar Adição</Button>
+                        <Button onClick={() => handleOpenDistributionModal('rebuy', {
+                            playerId: playerForDetails.id,
+                            playerName: playerForDetails.name,
+                            amount: parseFloat(rebuyAmount)
+                        })}>Confirmar Adição</Button>
                       </DialogFooter>
                     </>
                   )}
@@ -1176,6 +1291,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleRemoveChip(chip.id)}
+                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
                             >
                                 <Trash2 className="h-4 w-4 text-red-500/80" />
                             </Button>
@@ -1189,7 +1305,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                             <Button
                             variant="outline"
                             className="w-full"
-                            disabled={!isAdmin}
                             >
                             Adicionar Ficha
                             </Button>
@@ -1246,7 +1361,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                         variant="ghost"
                         className="w-full"
                         onClick={handleResetChips}
-                        disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
+                        disabled={players.length > 0 || cashedOutPlayers.length > 0}
                         >
                         Resetar Fichas
                         </Button>
@@ -1669,3 +1784,5 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 };
 
 export default CashGameManager;
+
+    
