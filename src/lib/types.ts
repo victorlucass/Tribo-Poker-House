@@ -27,6 +27,35 @@ export interface Card {
   rank: Rank;
 }
 
+// Tipos para Estado da Mão (Hand State)
+export type GamePhase = 'PRE_DEAL' | 'PRE_FLOP' | 'FLOP' | 'TURN' | 'RIVER' | 'SHOWDOWN';
+
+export interface PlayerHandState {
+    id: string; // Player ID
+    name: string;
+    seat: number;
+    stack: number; // Stack at the beginning of the hand
+    bet: number; // Current bet in this round
+    card1?: Card;
+    card2?: Card;
+    hasActed: boolean;
+    isFolded: boolean;
+    isAllIn: boolean;
+}
+
+export interface HandState {
+    phase: GamePhase;
+    pot: number;
+    communityCards: Card[];
+    activePlayerId: string | null;
+    lastRaise: number;
+    smallBlindAmount: number;
+    bigBlindAmount: number;
+    smallBlindPlayerId: string | null;
+    bigBlindPlayerId: string | null;
+    players: PlayerHandState[];
+}
+
 
 // Tipos para Cash Game
 export interface CashGameChip {
@@ -81,6 +110,7 @@ export interface CashGame {
     positionsSet: boolean;
     dealerId: string | null;
     createdAt: string; // Store as ISO string
+    handState?: HandState; // Optional HandState object
 }
 
 export interface UserProfile {

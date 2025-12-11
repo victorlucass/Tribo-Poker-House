@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Tournament": {
@@ -112,6 +113,65 @@
         "id",
         "firstPlacePercentage"
       ]
+    },
+    "CashGame": {
+      "title": "CashGame",
+      "type": "object",
+      "description": "Represents a live cash game session.",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "chips": { "type": "array", "items": { "$ref": "#/entities/CashGameChip" } },
+        "players": { "type": "array", "items": { "$ref": "#/entities/CashGamePlayer" } },
+        "cashedOutPlayers": { "type": "array", "items": { "$ref": "#/entities/CashedOutPlayer" } },
+        "requests": { "type": "array", "items": { "$ref": "#/entities/JoinRequest" } },
+        "positionsSet": { "type": "boolean" },
+        "dealerId": { "type": ["string", "null"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "handState": { "$ref": "#/entities/HandState" }
+      }
+    },
+    "HandState": {
+      "title": "HandState",
+      "type": "object",
+      "description": "Represents the state of a single hand in a cash game.",
+      "properties": {
+        "phase": { "type": "string", "enum": ["PRE_DEAL", "PRE_FLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN"] },
+        "pot": { "type": "number" },
+        "communityCards": { "type": "array", "items": { "$ref": "#/entities/Card" } },
+        "activePlayerId": { "type": ["string", "null"] },
+        "lastRaise": { "type": "number" },
+        "smallBlindAmount": { "type": "number" },
+        "bigBlindAmount": { "type": "number" },
+        "smallBlindPlayerId": { "type": ["string", "null"] },
+        "bigBlindPlayerId": { "type": ["string", "null"] },
+        "players": { "type": "array", "items": { "$ref": "#/entities/PlayerHandState" } }
+      }
+    },
+    "Card": {
+      "title": "Card",
+      "type": "object",
+      "properties": {
+        "suit": { "type": "string" },
+        "rank": { "type": "string" }
+      }
+    },
+    "PlayerHandState": {
+      "title": "PlayerHandState",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "seat": { "type": "number" },
+        "stack": { "type": "number" },
+        "bet": { "type": "number" },
+        "card1": { "$ref": "#/entities/Card" },
+        "card2": { "$ref": "#/entities/Card" },
+        "hasActed": { "type": "boolean" },
+        "isFolded": { "type": "boolean" },
+        "isAllIn": { "type": "boolean" }
+      }
     }
   },
   "auth": {
@@ -177,8 +237,18 @@
             }
           ]
         }
+      },
+       {
+        "path": "/cashGames/{gameId}",
+        "definition": {
+          "entityName": "CashGame",
+          "schema": {
+            "$ref": "#/entities/CashGame"
+          },
+          "description": "Stores details for a cash game session."
+        }
       }
     ],
-    "reasoning": "The Firestore data structure is designed to manage Texas Hold'em poker tournaments, focusing on configurability, real-time updates, and a clear separation of concerns. The structure emphasizes authorization independence, clarity, and performance.\n\n**Authorization Independence:**  Authorization is path-based. There is no reliance on `get()` calls within security rules.\n\n**Structure:**\n\n*   **/tournaments/{tournamentId}:** Stores tournament-level information (name, buy-in, start time, current round).\n*   **/tournaments/{tournamentId}/rounds/{roundId}:** Stores round details (blind levels, antes, duration).\n*   **/tournaments/{tournamentId}/payoutStructures/{payoutStructureId}:** Stores the payout structure (e.g., percentage for the winner).\n\n**QAPs Support:**\n\n*   The structure naturally supports secure `list` operations (QAPs) due to the flat, non-hierarchical authorization model within each collection. Listing tournaments is secure; listing rounds associated with a tournament is secure because access to the `rounds` subcollection is controlled via the `tournamentId` and the assumption that only authenticated users can view the tournament details, and therefore associated rounds.\n\n**Denormalization:**\n\n*   While the data structure doesn't require explicit denormalization for authorization, the `tournamentId` field in the `rounds` and `payoutStructures` subcollections act as a form of denormalization, enabling efficient querying and data retrieval without needing to traverse parent documents.\n\n**Additional Considerations:**\n\n*   **Timestamps:** Consider adding `createdAt` and `updatedAt` timestamp fields to each document for auditing and data management.\n*   **Status:** A `status` field (e.g., `DRAFT`, `ACTIVE`, `COMPLETED`) in the `tournaments` collection would facilitate state management.\n*   **Indexes:** Define composite indexes for common queries (e.g., tournaments by start time, rounds by round number).\n\nThis structure facilitates atomic operations within each collection (e.g., creating a round) and simplifies security rules by focusing on path-based access control. It is readily scalable and debuggable due to its clarity and independence from complex hierarchical dependencies."
+    "reasoning": "The Firestore data structure is designed to manage Texas Hold'em poker tournaments and cash games, focusing on configurability, real-time updates, and a clear separation of concerns. The structure emphasizes authorization independence, clarity, and performance.\n\n**Authorization Independence:**  Authorization is path-based. There is no reliance on `get()` calls within security rules.\n\n**Structure:**\n\n*   **/tournaments/{tournamentId}:** Stores tournament-level information.\n*   **/cashGames/{gameId}:** Stores cash game information, including an embedded `handState` object to manage the state of the current hand in real-time.\n\n**Denormalization:**\n\n*   The `handState` object within `/cashGames/{gameId}` is a form of denormalization. It keeps all data related to the active hand in one document, allowing for efficient real-time updates and reads from a single document listener, which is critical for the dealer mode functionality. This avoids complex queries across multiple collections during a fast-paced game."
   }
 }

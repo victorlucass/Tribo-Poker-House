@@ -1,4 +1,4 @@
-import type { Card, Rank, Suit, CashGamePlayer as Player } from './types';
+import type { Card, Rank, Suit, CashGamePlayer as Player, HandState, PlayerHandState, GamePhase } from './types';
 
 const SUITS: Suit[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -76,3 +76,69 @@ export const sortPlayersAndSetDealer = (players: Player[]): { playersWithDealtCa
 
   return { playersWithDealtCards, sortedPlayers, dealer: highestCardPlayer };
 };
+
+
+// --- New Hand Management Logic ---
+
+export function getNextPlayer(players: PlayerHandState[], currentActivePlayerId: string | null): PlayerHandState | null {
+    const activePlayers = players.filter(p => !p.isFolded && !p.isAllIn);
+    if (activePlayers.length === 0) return null;
+
+    const currentIndex = currentActivePlayerId ? activePlayers.findIndex(p => p.id === currentActivePlayerId) : -1;
+    const nextIndex = (currentIndex + 1) % activePlayers.length;
+    
+    return activePlayers[nextIndex];
+}
+
+export function startNewHand(players: Player[], dealerId: string, smallBlind: number, bigBlind: number): HandState {
+    const deck = shuffleDeck(createDeck());
+    const dealerIndex = players.findIndex(p => p.id === dealerId);
+    
+    // Determine blinds
+    const smallBlindIndex = (dealerIndex + 1) % players.length;
+    const bigBlindIndex = (dealerIndex + 2) % players.length;
+    const smallBlindPlayer = players[smallBlindIndex];
+    const bigBlindPlayer = players[bigBlindIndex];
+    
+    // Determine who acts first (UTG)
+    const firstToActIndex = (bigBlindIndex + 1) % players.length;
+    const firstToActPlayer = players[firstToActIndex];
+
+    // Get player's total investment to determine their stack for the hand
+    const getPlayerStack = (player: Player): number => {
+        return player.transactions.reduce((acc, t) => acc + t.amount, 0);
+    }
+
+    const playerHandStates: PlayerHandState[] = players.map(p => {
+        const stack = getPlayerStack(p);
+        let bet = 0;
+        if (p.id === smallBlindPlayer.id) bet = Math.min(smallBlind, stack);
+        if (p.id === bigBlindPlayer.id) bet = Math.min(bigBlind, stack);
+        
+        return {
+            id: p.id,
+            name: p.name,
+            seat: p.seat!,
+            stack: stack - bet,
+            bet: bet,
+            card1: deck.pop(),
+            card2: deck.pop(),
+            hasActed: false,
+            isFolded: false,
+            isAllIn: (stack - bet) === 0,
+        };
+    });
+
+    return {
+        phase: 'PRE_FLOP',
+        pot: playerHandStates.reduce((acc, p) => acc + p.bet, 0),
+        communityCards: [],
+        activePlayerId: firstToActPlayer.id,
+        lastRaise: bigBlind,
+        smallBlindAmount: smallBlind,
+        bigBlindAmount: bigBlind,
+        smallBlindPlayerId: smallBlindPlayer.id,
+        bigBlindPlayerId: bigBlindPlayer.id,
+        players: playerHandStates,
+    };
+}

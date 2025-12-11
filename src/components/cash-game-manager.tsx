@@ -252,10 +252,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       return;
     }
 
-    const chipMap = new Map<number, number>();
-    suggestedDistribution.forEach((c) => chipMap.set(c.chipId, c.count));
-
-    setTransactionDetails({ type, ...details, chipMap });
+    setTransactionDetails({ type, ...details });
     setIsDistributionModalOpen(true);
   };
 
@@ -488,6 +485,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
           gameId={gameId}
           isClient={isClient}
           currentUserIsPlayer={currentUserIsPlayer}
+          canManageGame={canManageGame}
           onLogoutClick={handleLogout}
         />
         
@@ -507,13 +505,19 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               onAdminJoin={(buyIn) => user && handleOpenDistributionModal('admin-join', { playerId: user.uid, playerName: user.nickname, amount: parseFloat(buyIn)})}
             />
 
-            {game.positionsSet && (
+            {game.positionsSet && game.handState?.players && (
               <Card>
                 <CardHeader>
                   <CardTitle>Mesa de Jogo</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <PokerTable players={players} dealerId={game?.dealerId ?? null} />
+                   <PokerTable
+                    players={game.handState.players}
+                    dealerId={game.dealerId}
+                    activePlayerId={game.handState.activePlayerId}
+                    communityCards={game.handState.communityCards}
+                    pot={game.handState.pot}
+                  />
                 </CardContent>
               </Card>
             )}
