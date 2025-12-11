@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,14 +30,26 @@ export default function SignupPage() {
         toast({ variant: 'destructive', title: 'Erro de Cadastro', description: 'Por favor, preencha todos os campos.' });
         return;
     }
+    
+    setIsLoading(true);
 
     if (!auth || !firestore) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Serviços do Firebase não disponíveis.' });
+      toast({ variant: 'destructive', title: 'Erro', description: 'Serviços do Firebase não disponíveis. Tente novamente em instantes.' });
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+
     try {
+      // Check if nickname already exists
+      const nicknameQuery = query(collection(firestore, "users"), where("nickname", "==", nickname));
+      const nicknameSnapshot = await getDocs(nicknameQuery);
+      if (!nicknameSnapshot.empty) {
+        toast({ variant: 'destructive', title: 'Erro de Cadastro', description: 'Este apelido já está em uso. Por favor, escolha outro.' });
+        setIsLoading(false);
+        return;
+      }
+
       // Step 1: Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
