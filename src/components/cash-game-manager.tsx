@@ -12,7 +12,7 @@ import type {
 } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { History, LogOut } from 'lucide-react';
+import { History, LogOut, Maximize } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
@@ -199,6 +199,8 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const [isCashOutOpen, setIsCashOutOpen] = useState(false);
   const [isSettlementOpen, setIsSettlementOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
 
   const [transactionDetails, setTransactionDetails] = useState<{
     type: 'buy-in' | 'rebuy' | 'approve' | 'admin-join';
@@ -505,18 +507,21 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               onAdminJoin={(buyIn) => user && handleOpenDistributionModal('admin-join', { playerId: user.uid, playerName: user.nickname, amount: parseFloat(buyIn)})}
             />
 
-            {game.positionsSet && game.handState?.players && (
-              <Card>
-                <CardHeader>
+            {game.positionsSet && game.handState && (
+               <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Mesa de Jogo</CardTitle>
+                  <Button variant="ghost" size="icon" onClick={() => setIsFullscreen(true)}>
+                    <Maximize />
+                  </Button>
                 </CardHeader>
-                <CardContent>
-                   <PokerTable
+                <CardContent className="pt-4">
+                  <PokerTable
                     players={game.handState.players}
                     dealerId={game.dealerId}
                     activePlayerId={game.handState.activePlayerId}
                     communityCards={game.handState.communityCards}
-                    pot={game.handState.pot}
+                    pots={game.handState.pots}
                   />
                 </CardContent>
               </Card>

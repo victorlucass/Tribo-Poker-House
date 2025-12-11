@@ -44,7 +44,7 @@ const CardComponent: React.FC<{ card: Card, isFaceDown?: boolean, isAnimating?: 
                  </div>
             </div>
             {/* Front of the card */}
-            <div className={cn("absolute w-full h-full backface-hidden transform rotate-y-180 bg-white flex flex-col justify-between p-1 border-2 border-gray-300 rounded-md")}>
+            <div className={cn("absolute w-full h-full backface-hidden transform rotate-y-180 bg-white flex flex-col justify-between p-1 border-2 border-gray-300 rounded-md", isFaceDown && 'transform-none')}>
                 <div className="flex flex-col items-start leading-none">
                     <span className={cn("font-bold text-lg", suitColors[card.suit])}>{card.rank}</span>
                     <span className={cn("text-base", suitColors[card.suit])}>{suitSymbols[card.suit]}</span>

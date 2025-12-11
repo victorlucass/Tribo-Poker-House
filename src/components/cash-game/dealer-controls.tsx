@@ -19,12 +19,28 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 interface DealerControlsProps {
   game: CashGame;
   onUpdateHand: (handState: Partial<HandState> | null) => void;
   onUpdateGame: (gameData: Partial<CashGame>) => void;
 }
+
+const winningHandTypes = [
+    "Todos foldaram",
+    "Royal Flush",
+    "Straight Flush",
+    "Quadra (Four of a Kind)",
+    "Full House",
+    "Flush",
+    "Sequência (Straight)",
+    "Trinca (Three of a Kind)",
+    "Dois Pares (Two Pair)",
+    "Um Par (One Pair)",
+    "Carta Alta (High Card)",
+];
 
 const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onUpdateGame }) => {
   const { handState, players, dealerId } = game;
@@ -35,6 +51,7 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
   const [betAmount, setBetAmount] = useState<string>('');
   const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
+  const [winningHand, setWinningHand] = useState<string>('');
 
   
   const canManuallyAdvance = useMemo(() => {
@@ -58,11 +75,14 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
     const finalHandStateForAward = collectBets(handState);
 
     const updatedPlayers = awardPotToWinner(finalHandStateForAward, game.players, selectedWinnerId);
+    
+    toast({ title: `Vencedor: ${game.players.find(p=>p.id === selectedWinnerId)?.name}`, description: `Ganhou com ${winningHand || 'uma mão vencedora'}.` });
 
     onUpdateGame({ players: updatedPlayers });
     onUpdateHand(null); // Clear the table for the next hand
     setIsWinnerModalOpen(false);
     setSelectedWinnerId(null);
+    setWinningHand('');
   };
 
   const handleAdvancePhase = (currentState: HandState) => {
@@ -205,29 +225,47 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Declarar Vencedor da Mão</DialogTitle>
-                        <DialogDescription>Selecione o vencedor da mão para distribuir o pote. O pote será calculado e o stack do jogador atualizado automaticamente.</DialogDescription>
+                        <DialogDescription>Selecione o vencedor e a mão para distribuir o pote. O stack do jogador será atualizado automaticamente.</DialogDescription>
                     </DialogHeader>
-                    <div className="my-4 space-y-2">
+                    <div className="my-4 space-y-4">
                         <p className="text-center text-lg">Pote Total: <span className="font-bold text-primary">{
                            totalPotValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                         }</span></p>
-                        <div className="grid grid-cols-2 gap-2">
-                           {potentialWinners.map(p => (
-                               <Button
-                                 key={p.id}
-                                 variant={selectedWinnerId === p.id ? 'default' : 'outline'}
-                                 onClick={() => setSelectedWinnerId(p.id)}
-                               >
-                                   {p.name}
-                               </Button>
-                           ))}
+                        
+                        <div className="space-y-2">
+                           <Label>Vencedor</Label>
+                           <div className="grid grid-cols-2 gap-2">
+                              {potentialWinners.map(p => (
+                                  <Button
+                                    key={p.id}
+                                    variant={selectedWinnerId === p.id ? 'default' : 'outline'}
+                                    onClick={() => setSelectedWinnerId(p.id)}
+                                  >
+                                      {p.name}
+                                  </Button>
+                              ))}
+                           </div>
+                        </div>
+
+                         <div className="space-y-2">
+                           <Label>Mão Vencedora</Label>
+                           <Select value={winningHand} onValueChange={setWinningHand}>
+                               <SelectTrigger>
+                                   <SelectValue placeholder="Selecione a mão vencedora..." />
+                               </SelectTrigger>
+                               <SelectContent>
+                                   {winningHandTypes.map(hand => (
+                                        <SelectItem key={hand} value={hand}>{hand}</SelectItem>
+                                   ))}
+                               </SelectContent>
+                           </Select>
                         </div>
                     </div>
                     <DialogFooter>
                          <DialogClose asChild>
                            <Button variant="ghost">Cancelar</Button>
                          </DialogClose>
-                         <Button onClick={handleEndHandWithWinner} disabled={!selectedWinnerId}>
+                         <Button onClick={handleEndHandWithWinner} disabled={!selectedWinnerId || !winningHand}>
                             Confirmar e Distribuir Pote
                          </Button>
                     </DialogFooter>
