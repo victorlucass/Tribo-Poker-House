@@ -43,51 +43,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const handleLogout = useCallback(() => {
     signOut(auth).then(() => {
       toast({ title: 'Logout efetuado com sucesso.' });
-      // The useEffect hook will handle the redirect to /login
+      // The useEffect below will handle the redirect to /login
     });
   }, [auth, toast]);
 
   useEffect(() => {
-    // Phase 1: Wait for Firebase Auth to be ready.
+    // Still waiting for Firebase Auth to initialize and check the user's status.
     if (isUserLoading) {
       setLoading(true);
       return;
     }
 
-    const publicPaths = ['/login', '/signup'];
-    const isPublicPath = publicPaths.includes(pathname);
+    const isPublicPath = ['/login', '/signup'].includes(pathname);
 
-    // Phase 2: Handle unauthenticated users.
+    // If no user is logged in
     if (!firebaseUser) {
       setUserProfile(null);
       if (!isPublicPath) {
-        // Use a timeout to ensure the current component has time to unmount
-        // before the router pushes to a new page.
-        setTimeout(() => router.push('/login'), 0);
+        router.push('/login');
       } else {
         setLoading(false);
       }
       return;
     }
 
-    // Phase 3: Handle authenticated users.
-    if (!firestore) {
-      // This should ideally not happen if FirebaseProvider is set up correctly,
-      // but it's a safe guard.
-      setLoading(true);
-      return;
-    }
-
+    // If a user is logged in, fetch their profile from Firestore
     const userDocRef = doc(firestore, 'users', firebaseUser.uid);
     getDoc(userDocRef)
       .then((docSnap) => {
         if (docSnap.exists()) {
           const profile = docSnap.data() as UserProfile;
           setUserProfile(profile);
+          // If they are on a public path (like login), redirect them to home
           if (isPublicPath) {
             router.push('/');
           }
         } else {
+          // This case should be rare, but if there's an auth record without a user doc, log them out.
           console.warn(`User profile not found for UID: ${firebaseUser.uid}. Logging out.`);
           handleLogout();
         }
@@ -97,9 +89,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         handleLogout();
       })
       .finally(() => {
+        // Only stop loading after all async operations for an authenticated user are complete.
         setLoading(false);
       });
-
   }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout]);
 
   const isSuperAdmin = userProfile?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;

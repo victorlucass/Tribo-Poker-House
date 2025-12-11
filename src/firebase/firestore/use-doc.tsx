@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useAuth } from '@/context/auth-context';
 
 /** Utility type to add an 'id' field to a given type T. */
 type WithId<T> = T & { id: string };
@@ -44,20 +45,22 @@ export function useDoc<T = any>(
   type StateDataType = WithId<T> | null;
 
   const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
+  const { loading: isAuthLoading } = useAuth();
+
 
   useEffect(() => {
-    if (!memoizedDocRef) {
+     // Don't fetch if the ref isn't ready or if auth is still loading.
+    if (!memoizedDocRef || isAuthLoading) {
+      setIsLoading(isAuthLoading);
       setData(null);
-      setIsLoading(false);
       setError(null);
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    // Optional: setData(null); // Clear previous data instantly
 
     const unsubscribe = onSnapshot(
       memoizedDocRef,
@@ -87,7 +90,7 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef]); // Re-run if the memoizedDocRef changes.
+  }, [memoizedDocRef, isAuthLoading]); // Re-run if the memoizedDocRef or auth state changes.
 
   return { data, isLoading, error };
 }
