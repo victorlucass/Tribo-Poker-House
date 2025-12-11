@@ -49,8 +49,8 @@ export default function SignupPage() {
       });
 
       // Determine user role
-      const isAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL === email;
-      const role = isAdmin ? 'admin' : 'player';
+      const isSuperAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL === email;
+      const role = isSuperAdmin ? 'super_admin' : 'player';
 
 
       // Create user profile document in Firestore

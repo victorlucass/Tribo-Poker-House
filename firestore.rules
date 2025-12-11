@@ -39,15 +39,13 @@ service cloud.firestore {
     function getUserRole(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data.role;
     }
-
-    function isSuperAdmin() {
-      // The super admin is defined by their email in an environment variable.
-      // We check the 'name' field which corresponds to the email in the auth token.
-      return request.auth.token.email == resource.data.superAdminEmail;
+    
+    function isSuperAdmin(userId) {
+      return getUserRole(userId) == 'super_admin';
     }
 
-    function isAdmin() {
-      let userRole = getUserRole(request.auth.uid);
+    function isAdmin(userId) {
+      let userRole = getUserRole(userId);
       return userRole == 'admin' || userRole == 'super_admin';
     }
 
@@ -56,37 +54,36 @@ service cloud.firestore {
     // --------------------------------
 
     match /users/{userId} {
+      // Any signed-in user can read another user's profile.
+      // Admins can list all users.
+      // Only the owner can create their own profile.
+      // Super admins can change any role. Admins can change roles of players.
+      // Owners can update their own profile, but cannot change their own role.
+      // Owners and super admins can delete users.
       allow read: if isSignedIn();
-      allow list: if isAdmin();
+      allow list: if isAdmin(request.auth.uid);
       allow create: if isOwner(userId);
-      // Only an admin can change a user's role, but users can update their own profile.
-      allow update: if isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role);
-      allow delete: if isOwner(userId);
+      allow update: if (isSuperAdmin(request.auth.uid)) ||
+                       (isAdmin(request.auth.uid) && resource.data.role != 'super_admin') ||
+                       (isOwner(userId) && request.resource.data.role == resource.data.role);
+      allow delete: if isOwner(userId) || isSuperAdmin(request.auth.uid);
     }
     
     match /cashGames/{gameId} {
-      // Anyone can read a cash game's data to see the details
+      // Anyone signed in can view a cash game.
       allow get: if isSignedIn();
       allow list: if isSignedIn();
 
-      // Only authenticated users with an 'admin' role can create a new cash game.
-      // The ownerId in the document must also match the creator's UID.
-      allow create: if isSignedIn() && isAdmin() && request.resource.data.ownerId == request.auth.uid;
+      // Only authenticated admins can create a new cash game.
+      allow create: if isAdmin(request.auth.uid);
       
-      // Update is tricky:
-      // - Admins and owners can change most things.
-      // - Any signed-in user can add themselves to the 'requests' array.
-      allow update: if isSignedIn() && 
-                      (
-                        (isOwner(resource.data.ownerId) || isAdmin()) ||
-                        (
-                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
-                          request.resource.data.requests.size() == resource.data.requests.size() + 1
-                        )
-                      );
+      // An admin/owner can update anything.
+      // Any signed in user can add a request to join.
+      allow update: if (isAdmin(request.auth.uid) || isOwner(resource.data.ownerId)) ||
+                       (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']));
       
       // Only the owner or an admin can delete the game
-      allow delete: if isSignedIn() && (isOwner(resource.data.ownerId) || isAdmin());
+      allow delete: if isAdmin(request.auth.uid) || isOwner(resource.data.ownerId);
     }
 
     match /tournaments/{tournamentId} {

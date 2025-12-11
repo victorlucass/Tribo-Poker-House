@@ -1054,7 +1054,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                   </Button>
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!canManageGame || players.length > 0}>
+                                      <Button variant="ghost" size="icon" disabled={!canManageGame}>
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                       </Button>
                                     </DialogTrigger>

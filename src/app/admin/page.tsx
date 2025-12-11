@@ -15,10 +15,10 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
-function UserRow({ user, currentUserId }: { user: UserProfile; currentUserId: string }) {
+function UserRow({ user, currentUserId, isCurrentUserSuperAdmin }: { user: UserProfile; currentUserId: string, isCurrentUserSuperAdmin: boolean }) {
   const firestore = useFirestore();
   const { toast } = useToast();
-  const isSuperAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const isThisUserSuperAdmin = user.role === 'super_admin';
 
   const handleRoleChange = async (newRole: 'admin' | 'player') => {
     if (!firestore) return;
@@ -38,13 +38,13 @@ function UserRow({ user, currentUserId }: { user: UserProfile; currentUserId: st
       <TableCell>{user.nickname}</TableCell>
       <TableCell className="hidden md:table-cell">{user.email}</TableCell>
       <TableCell className="text-right">
-        {isSuperAdmin ? (
+        {isThisUserSuperAdmin ? (
           <span className="text-xs font-semibold text-accent">SUPER ADMIN</span>
         ) : (
           <Switch
             checked={user.role === 'admin'}
             onCheckedChange={(checked) => handleRoleChange(checked ? 'admin' : 'player')}
-            disabled={user.uid === currentUserId}
+            disabled={!isCurrentUserSuperAdmin}
           />
         )}
       </TableCell>
@@ -69,7 +69,7 @@ export default function AdminPage() {
     }
   }, [isSuperAdmin, authLoading, router]);
 
-  if (authLoading || !isSuperAdmin) {
+  if (authLoading || !user || !isSuperAdmin) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <Skeleton className="h-64 w-full max-w-2xl" />
@@ -97,7 +97,7 @@ export default function AdminPage() {
               <Shield /> Gerenciamento de Usuários
             </CardTitle>
             <CardDescription>
-              Promova ou rebaixe usuários para o papel de administrador. Administradores podem gerenciar salas de cash game.
+              Promova ou rebaixe usuários para o papel de administrador. Apenas Super Admins podem alterar papéis.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -118,8 +118,10 @@ export default function AdminPage() {
                     <TableRow><TableCell colSpan={4}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
                   </>
                 ) : (
-                  users && users.map((u) => (
-                    <UserRow key={u.uid} user={u} currentUserId={user!.uid} />
+                  users && users
+                    .sort((a,b) => a.name.localeCompare(b.name))
+                    .map((u) => (
+                    <UserRow key={u.uid} user={u} currentUserId={user!.uid} isCurrentUserSuperAdmin={isSuperAdmin} />
                   ))
                 )}
               </TableBody>

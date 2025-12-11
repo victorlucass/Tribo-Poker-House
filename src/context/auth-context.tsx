@@ -41,11 +41,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   const handleLogout = useCallback(() => {
+    if (!auth) return;
     signOut(auth).then(() => {
+      setUserProfile(null);
+      router.push('/login');
       toast({ title: 'Logout efetuado com sucesso.' });
-      // The useEffect below will handle the redirect to /login
     });
-  }, [auth, toast]);
+  }, [auth, router, toast]);
 
   useEffect(() => {
     // 1. We are still waiting for Firebase to tell us if a user is logged in or not.
@@ -71,11 +73,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 3. Firebase has responded: There IS a user.
     // Let's fetch their profile from Firestore.
+    if (!firestore) return;
+
     const userDocRef = doc(firestore, 'users', firebaseUser.uid);
     getDoc(userDocRef)
       .then((docSnap) => {
         if (docSnap.exists()) {
-          setUserProfile(docSnap.data() as UserProfile);
+          const profile = docSnap.data() as UserProfile;
+          setUserProfile(profile);
+           if (isPublicPath) {
+             router.push('/');
+           } else {
+             setLoading(false);
+           }
         } else {
           // This is a failsafe. If a user exists in Auth but not Firestore, log them out.
           console.warn(`User profile not found for UID: ${firebaseUser.uid}. Logging out.`);
@@ -87,20 +97,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast({ variant: 'destructive', title: 'Erro de Perfil', description: 'Não foi possível carregar seu perfil.' });
         handleLogout();
       })
-      .finally(() => {
-        // 4. After fetching the profile, we are truly done loading.
-        // If they were on a public path, redirect them home.
-        if (isPublicPath) {
-          router.push('/');
-        } else {
-          setLoading(false);
-        }
-      });
       
   // We ONLY depend on these values. `pathname` and `router` can cause unwanted re-runs.
-  }, [firebaseUser, isUserLoading, firestore, handleLogout]);
+  }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout, toast]);
 
-  const isSuperAdmin = !!userProfile && userProfile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const isSuperAdmin = !!userProfile && userProfile.role === 'super_admin';
   const isAdmin = isSuperAdmin || (!!userProfile && userProfile.role === 'admin');
 
   const contextValue = {
@@ -113,7 +114,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <AuthContext.Provider value={contextValue}>
-      {loading ? <FullScreenLoader /> : children}
+      {loading && !['/login', '/signup'].includes(pathname) ? <FullScreenLoader /> : children}
     </AuthContext.Provider>
   );
 };
