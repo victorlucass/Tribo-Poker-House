@@ -11,7 +11,6 @@ interface CashGameHeaderProps {
   gameId: string;
   isClient: boolean;
   currentUserIsPlayer: boolean;
-  onMySituationClick: () => void;
   onLogoutClick: () => void;
 }
 
@@ -20,7 +19,6 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
   gameId,
   isClient,
   currentUserIsPlayer,
-  onMySituationClick,
   onLogoutClick,
 }) => {
   const { toast } = useToast();
@@ -52,9 +50,11 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
       </div>
       <div className="flex items-center gap-2">
         {currentUserIsPlayer && (
-            <Button variant="secondary" onClick={onMySituationClick}>
+            <Button variant="secondary" asChild>
+              <Link href={`/cash-game/${gameId}/my-situation`}>
                 <Wallet className="mr-2 h-4 w-4" />
                 Minha Situação
+              </Link>
             </Button>
         )}
         <Button variant="outline" onClick={onLogoutClick} size="sm" className="shrink-0">

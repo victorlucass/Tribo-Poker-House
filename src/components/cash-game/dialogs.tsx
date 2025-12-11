@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -28,113 +28,6 @@ const ChipIcon = ({ color, className }: { color: string; className?: string }) =
     style={{ backgroundColor: color }}
   />
 );
-
-// MySituationDialog
-interface MySituationDialogProps {
-  isOpen: boolean;
-  onOpenChange: (isOpen: boolean) => void;
-  player: CashGamePlayer;
-  sortedChips: CashGameChip[];
-}
-
-export const MySituationDialog: React.FC<MySituationDialogProps> = ({ isOpen, onOpenChange, player, sortedChips }) => {
-  const [myChipCounts, setMyChipCounts] = useState<Map<number, number>>(new Map());
-
-  const handleMyChipCountChange = (chipId: number, count: number) => {
-    setMyChipCounts(prev => new Map(prev).set(chipId, count));
-  };
-
-  const myCurrentChipsValue = useMemo(() => {
-    return Array.from(myChipCounts.entries()).reduce((acc, [chipId, count]) => {
-      const chip = sortedChips.find(c => c.id === chipId);
-      return acc + (chip ? chip.value * count : 0);
-    }, 0);
-  }, [myChipCounts, sortedChips]);
-  
-  const myTotalInvested = useMemo(() => {
-    if (!player) return 0;
-    return player.transactions.reduce((acc, t) => acc + t.amount, 0);
-  }, [player]);
-  
-  const myBalance = useMemo(() => {
-    return myCurrentChipsValue - myTotalInvested;
-  }, [myCurrentChipsValue, myTotalInvested]);
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] h-[90vh] max-w-none flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Minha Situação na Mesa</DialogTitle>
-          <DialogDescription>
-            Calcule seu balanço atual inserindo a quantidade de fichas que você tem.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid md:grid-cols-2 gap-8 flex-1 overflow-hidden">
-          <div className="flex flex-col">
-            <h3 className="font-semibold mb-2">Meu Investimento</h3>
-            <ScrollArea className="flex-1 pr-4 -mr-4">
-              <div className="space-y-1 text-sm">
-                {player?.transactions.map(t => (
-                   <div key={t.id} className="flex justify-between items-center">
-                      <span className="capitalize text-muted-foreground">{t.type} #{t.id}</span>
-                      <span className="font-mono">{t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                   </div>
-                ))}
-                 <Separator className="!my-2" />
-                 <div className="flex justify-between items-center font-bold">
-                    <span>Total Investido</span>
-                    <span className="font-mono">{myTotalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                 </div>
-              </div>
-            </ScrollArea>
-          </div>
-          <div className="flex flex-col">
-            <h3 className="font-semibold mb-2">Minhas Fichas Atuais</h3>
-             <ScrollArea className="flex-1 pr-4 -mr-4">
-              <div className="space-y-2">
-                {sortedChips.map((chip) => (
-                  <div key={chip.id} className="grid grid-cols-3 items-center gap-4">
-                    <Label htmlFor={`my-chip-${chip.id}`} className="text-right flex items-center justify-end gap-2 text-sm">
-                      <ChipIcon color={chip.color} />
-                      Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </Label>
-                    <Input
-                      id={`my-chip-${chip.id}`}
-                      type="number"
-                      inputMode="decimal"
-                      className="col-span-2"
-                      min="0"
-                      placeholder="Quantidade"
-                      value={myChipCounts.get(chip.id) || ''}
-                      onChange={(e) => handleMyChipCountChange(chip.id, parseInt(e.target.value) || 0)}
-                    />
-                  </div>
-                ))}
-              </div>
-             </ScrollArea>
-          </div>
-        </div>
-        <Separator className="my-4" />
-         <div className="space-y-2 text-lg">
-            <div className="flex justify-between items-center font-bold">
-               <Label>Valor Atual em Fichas:</Label>
-               <span className="font-mono text-primary">{myCurrentChipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-            </div>
-            <div className="flex justify-between items-center font-bold">
-               <Label>Balanço (Lucro/Prejuízo):</Label>
-               <span className={cn('font-mono', myBalance >= 0 ? 'text-green-400' : 'text-red-400')}>
-                {myBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </span>
-            </div>
-         </div>
-         <DialogFooter>
-            <Button onClick={() => onOpenChange(false)}>Fechar</Button>
-         </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
 
 // CashOutDialog
 interface CashOutDialogProps {

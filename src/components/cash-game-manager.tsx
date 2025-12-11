@@ -33,7 +33,6 @@ import PlayerActions from './cash-game/player-actions';
 import GameControls from './cash-game/game-controls';
 import SpectatorView from './cash-game/spectator-view';
 import {
-  MySituationDialog,
   CashOutDialog,
   ChipDistributionDialog,
   PlayerDetailsDialog,
@@ -176,12 +175,11 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const cashedOutPlayers = game?.cashedOutPlayers ?? [];
   const requests = game?.requests ?? [];
 
-  const currentUserPlayerInfo = useMemo(() => {
-    if (!user || !game) return null;
-    return game.players.find(p => p.id === user.uid) || null;
+  const currentUserIsPlayer = useMemo(() => {
+    if (!user || !game) return false;
+    return game.players.some(p => p.id === user.uid);
   }, [user, game]);
 
-  const currentUserIsPlayer = !!currentUserPlayerInfo;
   const isUserGameOwner = useMemo(() => game?.ownerId === user?.uid, [game, user]);
   const canManageGame = isAdmin || isUserGameOwner;
 
@@ -198,7 +196,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const [playerForDetails, setPlayerForDetails] = useState<Player | null>(null);
   const [playerToCashOut, setPlayerToCashOut] = useState<Player | null>(null);
   
-  const [isMySituationOpen, setIsMySituationOpen] = useState(false);
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const [isCashOutOpen, setIsCashOutOpen] = useState(false);
   const [isSettlementOpen, setIsSettlementOpen] = useState(false);
@@ -491,7 +488,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
           gameId={gameId}
           isClient={isClient}
           currentUserIsPlayer={currentUserIsPlayer}
-          onMySituationClick={() => setIsMySituationOpen(true)}
           onLogoutClick={handleLogout}
         />
         
@@ -600,15 +596,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       </div>
       
       {/* Dialogs */}
-      {currentUserPlayerInfo && (
-        <MySituationDialog 
-            isOpen={isMySituationOpen}
-            onOpenChange={setIsMySituationOpen}
-            player={currentUserPlayerInfo}
-            sortedChips={sortedChips}
-        />
-      )}
-
       {playerToCashOut && (
         <CashOutDialog
             isOpen={isCashOutOpen}
