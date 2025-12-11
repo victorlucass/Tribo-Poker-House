@@ -507,7 +507,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       if (p.id === playerId) {
         const newCounts = new Map(Object.entries(p.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
         newCounts.set(chipId, count);
-        // Firestore cannot store maps, so convert to object
         const finalChipCountsObj = Object.fromEntries(newCounts);
         return { ...p, finalChipCounts: finalChipCountsObj };
       }
@@ -717,7 +716,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 {isAdmin && (
                     <Button variant="outline" onClick={logout}>
                         <LogOut className="mr-2 h-4 w-4" />
-                        Sair do Modo Admin
+                        Sair
                     </Button>
                 )}
             </div>
@@ -1146,7 +1145,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                 updateGame({ chips: updatedChips });
                                 }}
                                 className="w-24 flex-1"
-                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                                disabled={!isAdmin}
                             />
                             <div className="flex items-center">
                                 <span className="mr-2 text-sm">R$</span>
@@ -1161,13 +1160,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                     updateGame({ chips: updatedChips });
                                 }}
                                 className="w-20"
-                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                                disabled={!isAdmin}
                                 />
                             </div>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                                disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                                 onClick={() => handleRemoveChip(chip.id)}
                             >
                                 <Trash2 className="h-4 w-4 text-red-500/80" />
@@ -1182,7 +1181,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                             <Button
                             variant="outline"
                             className="w-full"
-                            disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                            disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                             >
                             Adicionar Ficha
                             </Button>
@@ -1238,7 +1237,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                         variant="ghost"
                         className="w-full"
                         onClick={handleResetChips}
-                        disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                        disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                         >
                         Resetar Fichas
                         </Button>
@@ -1262,7 +1261,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 <CardFooter>
                     <Dialog open={isSettlementOpen} onOpenChange={setIsSettlementOpen}>
                     <DialogTrigger asChild>
-                        <Button className="w-full" disabled={players.length === 0}>
+                        <Button className="w-full" disabled={!isAdmin || players.length === 0}>
                         Iniciar Acerto de Contas
                         </Button>
                     </DialogTrigger>
