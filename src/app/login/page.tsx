@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth as useFirebaseAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { KeyRound, LogIn } from 'lucide-react';
 import Link from 'next/link';
+import { initiateEmailSignIn } from '@/firebase/non-blocking-login';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,18 +33,22 @@ export default function LoginPage() {
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: 'Login bem-sucedido!', description: 'Bem-vindo de volta.' });
-      // The AuthProvider will handle the redirect.
+      initiateEmailSignIn(auth, email, password);
+      // The AuthProvider will handle the redirect on successful login.
+      // We can optimistically show a toast.
+      toast({ title: 'Login em progresso...', description: 'Bem-vindo de volta.' });
+
     } catch (error: any) {
       console.error(error);
+      // NOTE: This catch block might not be triggered as expected with non-blocking calls.
+      // Errors are typically caught by the onAuthStateChanged listener's error callback.
+      // However, it's good practice to have it for synchronous errors.
       let description = 'Ocorreu um erro desconhecido.';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         description = 'Email ou senha incorretos.';
       }
       toast({ variant: 'destructive', title: 'Falha no Login', description });
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Only set loading to false on explicit failure
     }
   };
 

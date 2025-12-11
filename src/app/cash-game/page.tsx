@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { ArrowLeft, LogIn, LogOut, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import type { JoinRequest } from '@/lib/types';
+import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const generateId = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -39,7 +40,7 @@ export default function CashGameLandingPage() {
       toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, dê um nome para a sua sala.' });
       return;
     }
-    if (!user) {
+    if (!user || !firestore) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para criar uma sala.' });
       return;
     }
@@ -51,9 +52,9 @@ export default function CashGameLandingPage() {
 
     try {
       const gameId = generateId();
-      const gameRef = doc(firestore!, 'cashGames', gameId);
+      const gameRef = doc(firestore, 'cashGames', gameId);
 
-      await setDoc(gameRef, {
+      setDocumentNonBlocking(gameRef, {
         id: gameId,
         name: newGameName,
         chips: initialChips,
@@ -64,7 +65,7 @@ export default function CashGameLandingPage() {
         dealerId: null,
         createdAt: new Date().toISOString(),
         ownerId: user.uid,
-      });
+      }, {});
 
       toast({ title: 'Sala Criada!', description: `A sala "${newGameName}" foi criada com sucesso.` });
       router.push(`/cash-game/${gameId}`);
@@ -129,7 +130,7 @@ export default function CashGameLandingPage() {
           requestedAt: new Date().toISOString(),
         };
 
-        await updateDoc(gameRef, {
+        updateDocumentNonBlocking(gameRef, {
           requests: arrayUnion(newRequest),
         });
 

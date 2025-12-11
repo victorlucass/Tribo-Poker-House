@@ -67,13 +67,12 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc, setDoc, deleteDoc, updateDoc, getDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, arrayUnion } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
-import { errorEmitter } from '@/firebase/error-emitter';
 import { useAuth } from '@/context/auth-context';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -205,16 +204,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const updateGame = useCallback(
     (data: Partial<CashGame>) => {
       if (!gameRef) return;
-      try {
-        updateDoc(gameRef, data);
-      } catch (serverError) {
-        const permissionError = new FirestorePermissionError({
-          path: gameRef.path,
-          operation: 'update',
-          requestResourceData: data,
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      }
+      updateDocumentNonBlocking(gameRef, data);
     },
     [gameRef]
   );
@@ -415,7 +405,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
         // Atomically update players and requests
         const updatedRequests = currentGameData.requests.map(r => r.userId === request.userId ? { ...r, status: 'approved' as const } : r);
     
-        await updateGame({
+        updateGame({
             players: updatedPlayers,
             requests: updatedRequests
         });
@@ -462,17 +452,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     });
   };
 
- const handleDeclineRequest = async (request: JoinRequest) => {
-    if (!gameRef || !game) return;
+ const handleDeclineRequest = (request: JoinRequest) => {
+    if (!game) return;
     const updatedRequests = game.requests.map(r => 
         r.userId === request.userId ? { ...r, status: 'declined' as const } : r
     );
-    try {
-        await updateDoc(gameRef, { requests: updatedRequests });
-        toast({ title: 'Solicitação Recusada', description: `O pedido de ${request.userName} foi recusado.` });
-    } catch (error) {
-        console.error('Failed to decline request', error)
-    }
+    updateGame({ requests: updatedRequests });
+    toast({ title: 'Solicitação Recusada', description: `O pedido de ${request.userName} foi recusado.` });
   };
 
   const removePlayer = (id: string) => {
@@ -720,23 +706,18 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     setPlayerToCashOut(null);
   };
 
-  const resetGame = async () => {
+  const resetGame = () => {
     if (gameRef) {
-      try {
-        await deleteDoc(gameRef);
-        toast({ title: 'Sessão Finalizada!', description: 'A sala foi apagada e está pronta para ser recriada.' });
-        router.push('/cash-game');
-      } catch (e) {
-        console.error('Failed to delete game:', e);
-        toast({ variant: 'destructive', title: 'Erro ao Finalizar', description: 'Não foi possível apagar a sala.' });
-      }
+      deleteDocumentNonBlocking(gameRef);
+      toast({ title: 'Sessão Finalizada!', description: 'A sala foi apagada e está pronta para ser recriada.' });
+      router.push('/cash-game');
     }
   };
 
   const isUserGameOwner = useMemo(() => game?.ownerId === user?.uid, [game, user]);
   const canManageGame = isAdmin || isUserGameOwner;
 
-  if (status === 'loading' || isAuthLoading) {
+  if (status === 'loading' || isAuthLoading || !firestore) {
     return (
       <div className="min-h-screen w-full bg-background p-4 md:p-8">
         <div className="mx-auto w-full max-w-7xl space-y-8">

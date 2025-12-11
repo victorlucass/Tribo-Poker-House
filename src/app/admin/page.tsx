@@ -69,7 +69,7 @@ export default function AdminPage() {
     }
   }, [isSuperAdmin, authLoading, router]);
 
-  if (authLoading || !user || !isSuperAdmin) {
+  if (authLoading || !user || !isSuperAdmin || !firestore) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <Skeleton className="h-64 w-full max-w-2xl" />

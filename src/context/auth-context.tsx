@@ -44,62 +44,65 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!auth) return;
     signOut(auth).then(() => {
       setUserProfile(null);
-      router.push('/login');
+      // No need to push, useEffect will handle it.
       toast({ title: 'Logout efetuado com sucesso.' });
     });
-  }, [auth, router, toast]);
+  }, [auth, toast]);
 
   useEffect(() => {
-    // 1. We are still waiting for Firebase to tell us if a user is logged in or not.
+    const isPublicPath = ['/login', '/signup'].includes(pathname);
+
+    // If we're still waiting for Firebase Auth to initialize, show loader on protected pages.
     if (isUserLoading) {
       setLoading(true);
       return;
     }
 
-    const isPublicPath = ['/login', '/signup'].includes(pathname);
-
-    // 2. Firebase has responded: There is NO user.
+    // Firebase is initialized. If there's no user, redirect to login if not on a public path.
     if (!firebaseUser) {
       setUserProfile(null);
-      // If we are not on a public page, redirect to login.
       if (!isPublicPath) {
         router.push('/login');
       } else {
-        // If we are already on a public page, we can stop loading.
-        setLoading(false);
+        setLoading(false); // On public path, stop loading.
       }
       return;
     }
 
-    // 3. Firebase has responded: There IS a user.
-    // Let's fetch their profile from Firestore.
-    if (!firestore) return;
-
-    const userDocRef = doc(firestore, 'users', firebaseUser.uid);
-    getDoc(userDocRef)
-      .then((docSnap) => {
-        if (docSnap.exists()) {
-          const profile = docSnap.data() as UserProfile;
-          setUserProfile(profile);
-           if (isPublicPath) {
-             router.push('/');
-           } else {
-             setLoading(false);
-           }
-        } else {
-          // This is a failsafe. If a user exists in Auth but not Firestore, log them out.
-          console.warn(`User profile not found for UID: ${firebaseUser.uid}. Logging out.`);
+    // There is a Firebase user, but we might not have their profile yet.
+    if (!userProfile && firestore) {
+      const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+      getDoc(userDocRef)
+        .then((docSnap) => {
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data() as UserProfile);
+            // If user is now fetched and they are on a public page, redirect to home.
+            if (isPublicPath) {
+              router.push('/');
+            } else {
+              setLoading(false);
+            }
+          } else {
+            // Failsafe: user in Auth, but not Firestore.
+            console.error(`Profile not found for UID: ${firebaseUser.uid}. Forcing logout.`);
+            handleLogout();
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching user profile:", error);
+          toast({ variant: "destructive", title: "Erro de Perfil", description: "Não foi possível carregar o perfil." });
           handleLogout();
+        });
+    } else if (userProfile) {
+        // We have the user profile. If they are on a public path, redirect them.
+        if(isPublicPath){
+            router.push('/');
+        } else {
+            setLoading(false);
         }
-      })
-      .catch((error) => {
-        console.error('Error fetching user profile:', error);
-        toast({ variant: 'destructive', title: 'Erro de Perfil', description: 'Não foi possível carregar seu perfil.' });
-        handleLogout();
-      })
-      
-  // We ONLY depend on these values. `pathname` and `router` can cause unwanted re-runs.
-  }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout, toast]);
+    }
+  }, [firebaseUser, userProfile, isUserLoading, firestore, pathname, router, handleLogout, toast]);
+
 
   const isSuperAdmin = !!userProfile && userProfile.role === 'super_admin';
   const isAdmin = isSuperAdmin || (!!userProfile && userProfile.role === 'admin');
@@ -114,7 +117,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <AuthContext.Provider value={contextValue}>
-      {loading && !['/login', '/signup'].includes(pathname) ? <FullScreenLoader /> : children}
+      {loading ? <FullScreenLoader /> : children}
     </AuthContext.Provider>
   );
 };
