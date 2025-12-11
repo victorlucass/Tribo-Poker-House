@@ -40,14 +40,16 @@ service cloud.firestore {
 
       // Update Rules:
       // - Any signed-in user can update 'requests' to join.
-      // - The designated dealer can update the 'handState' to run the game.
+      // - The designated dealer can update the 'handState' OR the 'dealerId' to run the game.
       // - The game owner or an admin can update anything else.
       allow update: if isSignedIn() && 
                     (
                       // Allow anyone to request to join
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) ||
-                      // Allow the dealer to update the hand state
-                      (request.auth.uid == resource.data.dealerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handState'])) ||
+                      // Allow the dealer to update the hand state or the dealer button
+                      (request.auth.uid == resource.data.dealerId && 
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handState']) ||
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dealerId']))) ||
                       // Allow owner or admin to manage the game
                       (resource.data.ownerId == request.auth.uid || isAdmin())
                     );
