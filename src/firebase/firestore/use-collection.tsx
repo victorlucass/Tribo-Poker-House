@@ -4,6 +4,7 @@ import * as React from "react";
 import type {
   CollectionReference,
   DocumentData,
+  FirestoreError,
   Query,
   QuerySnapshot,
 } from "firebase/firestore";
@@ -24,7 +25,7 @@ export function useCollection<T = DocumentData>(
   const [status, setStatus] = React.useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
-  const [error, setError] = React.useState<Error | null>(null);
+  const [error, setError] = React.useState<FirestoreError | null>(null);
 
   React.useEffect(() => {
     if (!query || disabled) {
@@ -42,6 +43,7 @@ export function useCollection<T = DocumentData>(
         const docs = snapshot.docs.map((doc) => doc.data());
         setData(docs);
         setStatus("success");
+        setError(null);
       },
       (err) => {
         console.error(err);
@@ -57,5 +59,3 @@ export function useCollection<T = DocumentData>(
 
   return { data, status, error };
 }
-
-    

@@ -60,11 +60,11 @@ import { Separator } from './ui/separator';
 import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
-import { useDoc } from '@/firebase';
+import { useDoc, useFirestore } from '@/firebase';
 import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -193,15 +193,21 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { data: game, status, error } = useDoc<CashGame>(gameRef);
 
   const updateGame = useCallback(
-    async (data: Partial<CashGame>) => {
-      if (gameRef) {
-        try {
-          await updateDoc(gameRef, data);
-        } catch (e) {
-          console.error("Failed to update game:", e);
-          toast({ variant: 'destructive', title: 'Erro de Sincronização', description: 'Não foi possível salvar as alterações.'})
-        }
-      }
+    (data: Partial<CashGame>) => {
+      if (!gameRef) return;
+      updateDoc(gameRef, data).catch((e) => {
+        console.error('Failed to update game:', e);
+        const permissionError = new FirestorePermissionError({
+          path: gameRef.path,
+          operation: 'update',
+          requestResourceData: data,
+        });
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Sincronização',
+          description: permissionError.message || 'Não foi possível salvar as alterações.',
+        });
+      });
     },
     [gameRef, toast]
   );
@@ -633,9 +639,14 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 
   const resetGame = async () => {
     if (gameRef) {
-      await deleteDoc(gameRef);
-      toast({ title: 'Sessão Finalizada!', description: 'A sala foi apagada e está pronta para ser recriada.' });
-      router.push('/cash-game');
+      try {
+        await deleteDoc(gameRef);
+        toast({ title: 'Sessão Finalizada!', description: 'A sala foi apagada e está pronta para ser recriada.' });
+        router.push('/cash-game');
+      } catch (e) {
+         console.error('Failed to delete game:', e);
+         toast({ variant: 'destructive', title: 'Erro ao Finalizar', description: 'Não foi possível apagar a sala.' });
+      }
     }
   };
   
@@ -669,7 +680,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                       <CardTitle className="text-destructive">Erro ao Carregar a Sala</CardTitle>
                       <CardDescription>
                         {status === 'error' 
-                          ? 'Não foi possível conectar ao banco de dados. Tente recarregar a página.'
+                          ? 'Não foi possível conectar ao banco de dados. Verifique sua conexão e as regras de segurança do Firestore.'
                           : 'A sala que você está tentando acessar não foi encontrada. Verifique o ID e tente novamente.'
                         }
                       </CardDescription>

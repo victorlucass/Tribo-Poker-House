@@ -1,7 +1,11 @@
 "use client";
 
 import * as React from "react";
-import type { DocumentData, DocumentReference } from "firebase/firestore";
+import type {
+  DocumentData,
+  DocumentReference,
+  FirestoreError,
+} from "firebase/firestore";
 import { onSnapshot } from "firebase/firestore";
 
 type DocOptions = {
@@ -19,7 +23,7 @@ export function useDoc<T = DocumentData>(
   const [status, setStatus] = React.useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
-  const [error, setError] = React.useState<Error | null>(null);
+  const [error, setError] = React.useState<FirestoreError | null>(null);
 
   React.useEffect(() => {
     if (!ref || disabled) {
@@ -37,9 +41,11 @@ export function useDoc<T = DocumentData>(
         if (doc.exists()) {
           setData(doc.data());
         } else {
+          // Set data to null if the document doesn't exist.
           setData(null);
         }
         setStatus("success");
+        setError(null);
       },
       (err) => {
         console.error(err);
@@ -55,5 +61,3 @@ export function useDoc<T = DocumentData>(
 
   return { data, status, error };
 }
-
-    
