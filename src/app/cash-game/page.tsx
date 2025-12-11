@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, LogIn, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/context/auth-context';
 
 // Helper to generate a random ID
 const generateId = () => {
@@ -27,6 +28,7 @@ export default function CashGameLandingPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [newGameName, setNewGameName] = useState('');
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -99,25 +101,27 @@ export default function CashGameLandingPage() {
             </Button>
         </div>
       <div className="w-full max-w-md space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-accent"><PlusCircle /> Criar Nova Sala</CardTitle>
-            <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Input
-              placeholder="Nome da Sala (Ex: Jogo de Terça)"
-              value={newGameName}
-              onChange={(e) => setNewGameName(e.target.value)}
-              disabled={isCreating}
-            />
-          </CardContent>
-          <CardFooter>
-            <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
-              {isCreating ? 'Criando...' : 'Criar Sala'}
-            </Button>
-          </CardFooter>
-        </Card>
+        {isAdmin && (
+            <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-accent"><PlusCircle /> Criar Nova Sala</CardTitle>
+                <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Input
+                placeholder="Nome da Sala (Ex: Jogo de Terça)"
+                value={newGameName}
+                onChange={(e) => setNewGameName(e.target.value)}
+                disabled={isCreating}
+                />
+            </CardContent>
+            <CardFooter>
+                <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
+                {isCreating ? 'Criando...' : 'Criar Sala'}
+                </Button>
+            </CardFooter>
+            </Card>
+        )}
 
         <Card>
           <CardHeader>
