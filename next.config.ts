@@ -2,9 +2,6 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
-  experimental: {
-    serverComponentsExternalPackages: ['face-api.js'],
-  },
   typescript: {
     ignoreBuildErrors: true,
   },

@@ -104,9 +104,6 @@ export default function LoginPage() {
           <Button className="w-full" onClick={handleLogin} disabled={isLoading}>
             {isLoading ? 'Entrando...' : <><LogIn className="mr-2"/> Entrar</>}
           </Button>
-          <Button variant="secondary" className="w-full" onClick={() => router.push('/facial-login')} disabled={isLoading}>
-            <Smile className="mr-2" /> Entrar com Rosto
-          </Button>
           <Button variant="link" asChild>
             <Link href="/signup">Não tem uma conta? Cadastre-se</Link>
           </Button>
