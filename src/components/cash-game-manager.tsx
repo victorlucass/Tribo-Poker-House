@@ -882,48 +882,49 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                           Pedido às {new Date(req.requestedAt).toLocaleTimeString('pt-BR')}
                         </p>
                       </div>
-                      <div className="flex gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="text-green-400 border-green-400/50 hover:bg-green-400/10 hover:text-green-300"
-                              onClick={() => setApprovingPlayer(req)}
-                            >
-                              <Check className="h-5 w-5" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-md">
-                            <DialogHeader>
-                              <DialogTitle>Aprovar {req.userName}?</DialogTitle>
-                              <DialogDescription>
-                                Insira o valor do buy-in para adicionar o jogador à mesa.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="py-4">
-                              <Label htmlFor="approval-buy-in">Valor do Buy-in (R$)</Label>
-                              <Input
-                                id="approval-buy-in"
-                                type="number"
-                                inputMode="decimal"
-                                placeholder="Ex: 50.00"
-                                value={approvalBuyIn}
-                                onChange={(e) => setApprovalBuyIn(e.target.value)}
-                              />
-                            </div>
-                            <DialogFooter>
-                              <DialogClose asChild>
-                                <Button variant="outline">Cancelar</Button>
-                              </DialogClose>
-                              <Button onClick={() => handleApproveRequest(req)} disabled={!approvalBuyIn}>
-                                Confirmar e Distribuir Fichas
+                      <div className="flex items-center gap-2">
+                         <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => setApprovingPlayer(req)}
+                              >
+                                <Check className="h-4 w-4 mr-2" />
+                                Aprovar
                               </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                        <Button size="icon" variant="destructive" onClick={() => handleDeclineRequest(req)}>
-                          <X className="h-5 w-5" />
+                            </DialogTrigger>
+                           <DialogContent className="max-w-md">
+                             <DialogHeader>
+                               <DialogTitle>Aprovar {req.userName}?</DialogTitle>
+                               <DialogDescription>
+                                 Insira o valor do buy-in para adicionar o jogador à mesa.
+                               </DialogDescription>
+                             </DialogHeader>
+                             <div className="py-4">
+                               <Label htmlFor="approval-buy-in">Valor do Buy-in (R$)</Label>
+                               <Input
+                                 id="approval-buy-in"
+                                 type="number"
+                                 inputMode="decimal"
+                                 placeholder="Ex: 50.00"
+                                 value={approvalBuyIn}
+                                 onChange={(e) => setApprovalBuyIn(e.target.value)}
+                               />
+                             </div>
+                             <DialogFooter>
+                               <DialogClose asChild>
+                                 <Button variant="outline">Cancelar</Button>
+                               </DialogClose>
+                               <Button onClick={() => handleApproveRequest(req)} disabled={!approvalBuyIn}>
+                                 Confirmar e Distribuir Fichas
+                               </Button>
+                             </DialogFooter>
+                           </DialogContent>
+                         </Dialog>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeclineRequest(req)}>
+                          <X className="h-4 w-4 mr-2" />
+                          Recusar
                         </Button>
                       </div>
                     </div>

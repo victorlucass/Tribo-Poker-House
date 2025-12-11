@@ -47,7 +47,8 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return getUserRole(request.auth.uid) == 'admin';
+      let userRole = getUserRole(request.auth.uid);
+      return userRole == 'admin' || userRole == 'super_admin';
     }
 
     // --------------------------------
@@ -72,8 +73,17 @@ service cloud.firestore {
       // The ownerId in the document must also match the creator's UID.
       allow create: if isSignedIn() && isAdmin() && request.resource.data.ownerId == request.auth.uid;
       
-      // Only the owner or an admin can update the game state
-      allow update: if isSignedIn() && (isOwner(resource.data.ownerId) || isAdmin());
+      // Update is tricky:
+      // - Admins and owners can change most things.
+      // - Any signed-in user can add themselves to the 'requests' array.
+      allow update: if isSignedIn() && 
+                      (
+                        (isOwner(resource.data.ownerId) || isAdmin()) ||
+                        (
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) &&
+                          request.resource.data.requests.size() == resource.data.requests.size() + 1
+                        )
+                      );
       
       // Only the owner or an admin can delete the game
       allow delete: if isSignedIn() && (isOwner(resource.data.ownerId) || isAdmin());
