@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { useFirestore, useCollection } from '@/firebase';
@@ -15,10 +15,10 @@ import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 
-function UserRow({ user, currentUserId, superAdminEmail }: { user: UserProfile; currentUserId: string, superAdminEmail: string }) {
+function UserRow({ user, currentUserId }: { user: UserProfile; currentUserId: string }) {
   const firestore = useFirestore();
   const { toast } = useToast();
-  const isSuperAdmin = user.email === superAdminEmail;
+  const isSuperAdmin = user.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   const handleRoleChange = async (newRole: 'admin' | 'player') => {
     if (!firestore) return;
@@ -44,7 +44,7 @@ function UserRow({ user, currentUserId, superAdminEmail }: { user: UserProfile; 
           <Switch
             checked={user.role === 'admin'}
             onCheckedChange={(checked) => handleRoleChange(checked ? 'admin' : 'player')}
-            disabled={user.uid === currentUserId && !isSuperAdmin}
+            disabled={user.uid === currentUserId}
           />
         )}
       </TableCell>
@@ -60,14 +60,7 @@ export default function AdminPage() {
   const usersCollection = firestore ? collection(firestore, 'users') : null;
   const { data: users, isLoading: usersLoading } = useCollection<UserProfile>(usersCollection);
 
-  const [superAdminEmail, setSuperAdminEmail] = useState('');
-
   useEffect(() => {
-    const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    if (adminEmail) {
-      setSuperAdminEmail(adminEmail);
-    }
-    
     if (!authLoading && !isSuperAdmin) {
       router.push('/');
     }
@@ -123,7 +116,7 @@ export default function AdminPage() {
                   </>
                 ) : (
                   users && users.map((u) => (
-                    <UserRow key={u.uid} user={u} currentUserId={user!.uid} superAdminEmail={superAdminEmail} />
+                    <UserRow key={u.uid} user={u} currentUserId={user!.uid} />
                   ))
                 )}
               </TableBody>

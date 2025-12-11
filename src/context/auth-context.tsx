@@ -36,13 +36,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If the firebase user is still loading, we are loading.
     if (isUserLoading) {
+      setLoading(true);
       return;
     }
 
     const publicPaths = ['/login', '/signup'];
     const isPublicPath = publicPaths.includes(pathname);
-
+    
+    // If there is no firebase user and we are not on a public path, redirect to login
     if (!firebaseUser) {
       setUserProfile(null);
       if (!isPublicPath) {
@@ -52,30 +55,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
-    if (firestore) {
-      const userDocRef = doc(firestore, 'users', firebaseUser.uid);
-      getDoc(userDocRef)
-        .then((docSnap) => {
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as UserProfile);
-            if (isPublicPath) {
-              router.push('/');
-            }
-          } else {
-            console.warn(`User profile not found in Firestore for UID: ${firebaseUser.uid}.`);
-            setUserProfile(null);
-            router.push('/login');
-          }
-        })
-        .catch((error) => {
-          console.error('Error fetching user profile:', error);
-          setUserProfile(null);
-          router.push('/login');
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+    // If there is a firebase user, but we don't have a firestore instance yet, we are loading.
+    if (!firestore) {
+      setLoading(true);
+      return;
     }
+
+    // Fetch user profile from Firestore
+    const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+    getDoc(userDocRef)
+      .then((docSnap) => {
+        if (docSnap.exists()) {
+          const profile = docSnap.data() as UserProfile;
+          setUserProfile(profile);
+          // If user is logged in and on a public path, redirect to home
+          if (isPublicPath) {
+            router.push('/');
+          }
+        } else {
+          // This can happen on first signup before the doc is created.
+          // Or if the user was deleted from Firestore but not from Auth.
+          console.warn(`User profile not found in Firestore for UID: ${firebaseUser.uid}. Logging out.`);
+          setUserProfile(null);
+          // signOut(getAuth()); // Consider signing out the user
+          router.push('/login');
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching user profile:', error);
+        setUserProfile(null);
+        router.push('/login');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+      
   }, [firebaseUser, isUserLoading, firestore, pathname, router]);
 
   const isSuperAdmin = userProfile?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
@@ -84,7 +98,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   if (loading) {
     return <FullScreenLoader />;
   }
-
+  
   return (
     <AuthContext.Provider value={{ user: userProfile, loading, isAdmin, isSuperAdmin }}>
       {children}
