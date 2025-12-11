@@ -52,6 +52,7 @@ import {
   History,
   Shuffle,
   Copy,
+  Lock,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -66,6 +67,7 @@ import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
+import { useAuth } from '@/context/auth-context';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -185,6 +187,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { toast } = useToast();
   const firestore = useFirestore();
   const router = useRouter();
+  const { isAdmin, logout } = useAuth();
 
   const gameRef = useMemo(() => {
     if (!firestore || !gameId) return null;
@@ -722,6 +725,12 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               </div>
             </div>
           </div>
+          {isAdmin && (
+            <Button variant="outline" onClick={logout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair do Modo Admin
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -731,6 +740,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 <CardTitle className="flex items-center gap-2">
                   <UserPlus /> Adicionar Jogador
                 </CardTitle>
+                {!isAdmin && <CardDescription className="text-amber-500 flex items-center gap-2"><Lock size={16} />Apenas administradores podem adicionar jogadores.</CardDescription>}
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col md:flex-row gap-4">
@@ -738,14 +748,16 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                     placeholder="Nome do Jogador"
                     value={newPlayerName}
                     onChange={(e) => setNewPlayerName(e.target.value)}
+                    disabled={!isAdmin}
                   />
                   <Input
                     type="number"
                     placeholder="Valor do Buy-in (R$)"
                     value={newPlayerBuyIn}
                     onChange={(e) => setNewPlayerBuyIn(e.target.value)}
+                    disabled={!isAdmin}
                   />
-                  <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto">
+                  <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto" disabled={!isAdmin}>
                     <PlusCircle className="mr-2" />
                     Adicionar
                   </Button>
@@ -779,7 +791,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                     <CardDescription>Distribuição de fichas e ações para cada jogador ativo.</CardDescription>
                   </div>
                   {!positionsSet && players.length > 1 && (
-                    <Button onClick={handleStartDealing} variant="secondary">
+                    <Button onClick={handleStartDealing} variant="secondary" disabled={!isAdmin}>
                       <Shuffle className="mr-2 h-4 w-4" />
                       Sortear Posições
                     </Button>
@@ -832,16 +844,16 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                 ))}
                                 <TableCell className="text-right flex items-center justify-end gap-1">
                                   <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" onClick={() => setPlayerForDetails(player)}>
+                                    <Button variant="outline" size="sm" onClick={() => setPlayerForDetails(player)} disabled={!isAdmin}>
                                       <FileText className="h-4 w-4" />
                                     </Button>
                                   </DialogTrigger>
-                                  <Button variant="outline" size="sm" onClick={() => handleOpenCashOut(player)}>
+                                  <Button variant="outline" size="sm" onClick={() => handleOpenCashOut(player)} disabled={!isAdmin}>
                                     <LogOut className="h-4 w-4" />
                                   </Button>
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={positionsSet}>
+                                      <Button variant="ghost" size="icon" disabled={!isAdmin || positionsSet}>
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                       </Button>
                                     </DialogTrigger>
@@ -1072,7 +1084,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 <CardTitle className="flex items-center gap-2">
                   <Palette /> Fichas do Jogo
                 </CardTitle>
-                <CardDescription>Configure os valores e cores das fichas.</CardDescription>
+                {!isAdmin && <CardDescription className="text-amber-500 flex items-center gap-2"><Lock size={16} />Apenas administradores podem gerenciar fichas.</CardDescription>}
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -1089,7 +1101,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                           updateGame({ chips: updatedChips });
                         }}
                         className="w-24 flex-1"
-                        disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                        disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                       />
                       <div className="flex items-center">
                         <span className="mr-2 text-sm">R$</span>
@@ -1104,13 +1116,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                             updateGame({ chips: updatedChips });
                           }}
                           className="w-20"
-                          disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                          disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                         />
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                        disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                         onClick={() => handleRemoveChip(chip.id)}
                       >
                         <Trash2 className="h-4 w-4 text-red-500/80" />
@@ -1125,7 +1137,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                     <Button
                       variant="outline"
                       className="w-full"
-                      disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                      disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                     >
                       Adicionar Ficha
                     </Button>
@@ -1181,7 +1193,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                   variant="ghost"
                   className="w-full"
                   onClick={handleResetChips}
-                  disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                  disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                 >
                   Resetar Fichas
                 </Button>
@@ -1193,9 +1205,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 <CardTitle className="flex items-center gap-2">
                   <Calculator /> Acerto de Contas
                 </CardTitle>
-                <CardDescription>
-                  Ao final do jogo, insira a contagem de fichas de cada jogador para calcular os resultados.
-                </CardDescription>
+                {!isAdmin ? (
+                   <CardDescription className="text-amber-500 flex items-center gap-2"><Lock size={16} />Apenas administradores podem iniciar o acerto de contas.</CardDescription>
+                ) : (
+                  <CardDescription>
+                    Ao final do jogo, insira a contagem de fichas de cada jogador para calcular os resultados.
+                  </CardDescription>
+                )}
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground text-center">
@@ -1205,7 +1221,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               <CardFooter>
                 <Dialog open={isSettlementOpen} onOpenChange={setIsSettlementOpen}>
                   <DialogTrigger asChild>
-                    <Button className="w-full" disabled={players.length === 0}>
+                    <Button className="w-full" disabled={!isAdmin || players.length === 0}>
                       Iniciar Acerto de Contas
                     </Button>
                   </DialogTrigger>
