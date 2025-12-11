@@ -29,22 +29,27 @@ export default function DealerPage() {
   const { data: game, status } = useDoc<CashGame>(gameRef);
 
   const [showCommunityCardAnimation, setShowCommunityCardAnimation] = useState(false);
+  const [previousPhase, setPreviousPhase] = useState<string | undefined>(undefined);
 
   // Monitor phase changes to trigger animations
   useEffect(() => {
-    if (game?.handState?.phase === 'FLOP' || game?.handState?.phase === 'TURN' || game?.handState?.phase === 'RIVER') {
-      setShowCommunityCardAnimation(true);
-      const timer = setTimeout(() => setShowCommunityCardAnimation(false), 1000); // Animation duration
-      return () => clearTimeout(timer);
+    const currentPhase = game?.handState?.phase;
+    if (currentPhase && currentPhase !== previousPhase) {
+      if (currentPhase === 'FLOP' || currentPhase === 'TURN' || currentPhase === 'RIVER') {
+        setShowCommunityCardAnimation(true);
+        const timer = setTimeout(() => setShowCommunityCardAnimation(false), 1000); // Animation duration
+        return () => clearTimeout(timer);
+      }
     }
-  }, [game?.handState?.phase]);
+    setPreviousPhase(currentPhase);
+  }, [game?.handState?.phase, previousPhase]);
 
 
   const updateHandState = useCallback(
     (handState: Partial<HandState> | null) => {
       if (!gameRef) return;
-      const dataToUpdate = handState === null ? { handState: null } : { handState };
-      updateDocumentNonBlocking(gameRef, dataToUpdate);
+      // Using `handState: handState ?? null` ensures field is deleted if null is passed
+      updateDocumentNonBlocking(gameRef, { handState: handState ?? null });
     },
     [gameRef]
   );
@@ -129,6 +134,11 @@ export default function DealerPage() {
     );
   }
 
+  const getPlayerInitialStack = (playerId: string) => {
+      const player = game.players.find(p => p.id === playerId);
+      if (!player) return 0;
+      return player.transactions.reduce((acc, t) => acc + t.amount, 0);
+  }
 
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center overflow-hidden bg-black p-2 lg:p-4">
@@ -139,7 +149,7 @@ export default function DealerPage() {
                 id: p.id,
                 name: p.name,
                 seat: p.seat!,
-                stack: p.transactions.reduce((acc, t) => acc + t.amount, 0),
+                stack: getPlayerInitialStack(p.id),
                 bet: 0,
                 hasActed: false,
                 isFolded: false,
