@@ -706,7 +706,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
       {isDealing && <CardDealAnimation players={playersForAnimation} onComplete={onDealingComplete} />}
       <div className="mx-auto w-full max-w-7xl">
-        <div className="flex items-start justify-between gap-4 mb-8">
+        <header className="flex items-start justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
             <Button asChild variant="outline" size="icon">
               <Link href="/cash-game">
@@ -731,10 +731,10 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 Sair do Modo Admin
             </Button>
           )}
-        </div>
+        </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
+          <main className="lg:col-span-2 space-y-8">
             {isAdmin && (
                 <Card>
                 <CardHeader>
@@ -1061,9 +1061,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 </CardContent>
               </Card>
             )}
-          </div>
+          </main>
 
-          <div className="space-y-8">
+          <aside className="space-y-8">
             <Card className="bg-secondary">
               <CardHeader>
                 <CardTitle className="text-secondary-foreground">Banca Ativa</CardTitle>
@@ -1504,7 +1504,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 </Card>
                 </>
             )}
-          </div>
+          </aside>
         </div>
       </div>
 
