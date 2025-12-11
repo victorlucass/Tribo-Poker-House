@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,13 +15,6 @@ export default function Home() {
   const router = useRouter();
   const auth = getAuth();
   const { toast } = useToast();
-
-  useEffect(() => {
-    // Apenas redireciona se o carregamento estiver concluído E não houver usuário
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
 
   const handleLogout = () => {
     signOut(auth).then(() => {
