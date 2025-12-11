@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, updateDoc } from 'firebase/firestore';
 import type { UserProfile } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +57,10 @@ export default function AdminPage() {
   const router = useRouter();
   const firestore = useFirestore();
 
-  const usersCollection = firestore ? collection(firestore, 'users') : null;
+  const usersCollection = useMemoFirebase(
+    () => (firestore ? collection(firestore, 'users') : null),
+    [firestore]
+  );
   const { data: users, isLoading: usersLoading } = useCollection<UserProfile>(usersCollection);
 
   useEffect(() => {
