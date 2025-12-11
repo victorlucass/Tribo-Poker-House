@@ -16,9 +16,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const FullScreenLoader = () => (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-8">
-            <Skeleton className="h-48 w-full" />
+    <div className="flex h-screen w-full items-center justify-center bg-background p-8">
+        <div className="w-full max-w-md space-y-4">
+            <Skeleton className="h-24 w-full" />
             <Skeleton className="h-16 w-full" />
         </div>
     </div>
