@@ -90,26 +90,31 @@ export function getNextPlayer(players: PlayerHandState[], currentActivePlayerId:
     return activePlayers[nextIndex];
 }
 
-export function startNewHand(players: Player[], dealerId: string, smallBlind: number, bigBlind: number): HandState {
+export function startNewHand(players: Player[], currentDealerId: string, smallBlind: number, bigBlind: number): { handState: HandState, nextDealerId: string } {
     const deck = shuffleDeck(createDeck());
-    const dealerIndex = players.findIndex(p => p.id === dealerId);
+    const sortedPlayers = [...players].sort((a, b) => a.seat! - b.seat!);
     
-    // Determine blinds
-    const smallBlindIndex = (dealerIndex + 1) % players.length;
-    const bigBlindIndex = (dealerIndex + 2) % players.length;
-    const smallBlindPlayer = players[smallBlindIndex];
-    const bigBlindPlayer = players[bigBlindIndex];
+    // Determine the next dealer
+    const currentDealerIndex = sortedPlayers.findIndex(p => p.id === currentDealerId);
+    const nextDealerIndex = (currentDealerIndex + 1) % sortedPlayers.length;
+    const nextDealer = sortedPlayers[nextDealerIndex];
+    
+    // Determine blinds based on the new dealer
+    const smallBlindIndex = (nextDealerIndex + 1) % sortedPlayers.length;
+    const bigBlindIndex = (nextDealerIndex + 2) % sortedPlayers.length;
+    const smallBlindPlayer = sortedPlayers[smallBlindIndex];
+    const bigBlindPlayer = sortedPlayers[bigBlindIndex];
     
     // Determine who acts first (UTG)
-    const firstToActIndex = (bigBlindIndex + 1) % players.length;
-    const firstToActPlayer = players[firstToActIndex];
+    const firstToActIndex = (bigBlindIndex + 1) % sortedPlayers.length;
+    const firstToActPlayer = sortedPlayers[firstToActIndex];
 
     // Get player's total investment to determine their stack for the hand
     const getPlayerStack = (player: Player): number => {
         return player.transactions.reduce((acc, t) => acc + t.amount, 0);
     }
 
-    const playerHandStates: PlayerHandState[] = players.map(p => {
+    const playerHandStates: PlayerHandState[] = sortedPlayers.map(p => {
         const stack = getPlayerStack(p);
         let bet = 0;
         if (p.id === smallBlindPlayer.id) bet = Math.min(smallBlind, stack);
@@ -129,7 +134,7 @@ export function startNewHand(players: Player[], dealerId: string, smallBlind: nu
         };
     });
 
-    return {
+    const handState: HandState = {
         phase: 'PRE_FLOP',
         pot: playerHandStates.reduce((acc, p) => acc + p.bet, 0),
         communityCards: [],
@@ -141,4 +146,6 @@ export function startNewHand(players: Player[], dealerId: string, smallBlind: nu
         bigBlindPlayerId: bigBlindPlayer.id,
         players: playerHandStates,
     };
+
+    return { handState, nextDealerId: nextDealer.id };
 }

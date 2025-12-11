@@ -1,26 +1,43 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Hand, Play, FastForward, Undo, Check, X, CircleDollarSign } from 'lucide-react';
+import { Hand, Play, FastForward, Check, X, CircleDollarSign } from 'lucide-react';
 import type { CashGame, HandState } from '@/lib/types';
 import { startNewHand, getNextPlayer } from '@/lib/poker-utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface DealerControlsProps {
   game: CashGame;
   onUpdateHand: (handState: Partial<HandState> | null) => void;
+  onUpdateGame: (gameData: Partial<CashGame>) => void;
 }
 
-const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand }) => {
+const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onUpdateGame }) => {
   const { handState, players, dealerId } = game;
   const activePlayer = handState?.players.find(p => p.id === handState?.activePlayerId);
+
+  const [isBetModalOpen, setIsBetModalOpen] = useState(false);
+  const [betAmount, setBetAmount] = useState<string>('');
 
   const handleStartNewHand = () => {
     if (!dealerId || players.length < 2) return;
     // For now, let's assume fixed blinds. This can be made configurable later.
-    const newHand = startNewHand(players, dealerId, 1, 2); 
+    const { handState: newHand, nextDealerId } = startNewHand(players, dealerId, 1, 2); 
     onUpdateHand(newHand);
+    onUpdateGame({ dealerId: nextDealerId });
   };
   
   const handleEndHand = () => {
@@ -65,6 +82,16 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand }) =
     });
   };
 
+  const confirmBet = () => {
+    const amount = parseFloat(betAmount);
+    if (!isNaN(amount) && amount > 0) {
+        handlePlayerAction('bet', amount);
+    }
+    setIsBetModalOpen(false);
+    setBetAmount('');
+  }
+
+
   if (!handState) {
     return (
       <Card className="bg-gray-900/80 border-gray-700 text-white">
@@ -99,9 +126,29 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand }) =
         <div className="flex items-center gap-2">
             <Button variant="outline" className="bg-transparent text-white" onClick={() => handlePlayerAction('fold')}><X className="mr-2"/> Fold</Button>
             <Button variant="outline" className="bg-transparent text-white" onClick={() => handlePlayerAction('check')}><Check className="mr-2"/> Check</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => handlePlayerAction('bet', 10)}>
-                <CircleDollarSign className="mr-2"/> Bet 10
-            </Button>
+            <Dialog open={isBetModalOpen} onOpenChange={setIsBetModalOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                    <CircleDollarSign className="mr-2"/> Bet/Raise
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>Registrar Aposta / Aumento</DialogTitle>
+                    <DialogDescription>Insira o valor total da aposta do jogador.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="bet-amount">Valor da Aposta</Label>
+                    <Input id="bet-amount" type="number" inputMode="decimal" placeholder="Ex: 50" value={betAmount} onChange={e => setBetAmount(e.target.value)} />
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">Cancelar</Button>
+                    </DialogClose>
+                    <Button onClick={confirmBet}>Confirmar Aposta</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
         </div>
       </CardContent>
     </Card>

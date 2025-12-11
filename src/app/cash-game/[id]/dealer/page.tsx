@@ -36,6 +36,14 @@ export default function DealerPage() {
     [gameRef]
   );
   
+  const updateGame = useCallback(
+    (gameData: Partial<CashGame>) => {
+      if (!gameRef) return;
+      updateDocumentNonBlocking(gameRef, gameData);
+    },
+    [gameRef]
+  );
+
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen w-full flex-col items-center justify-center bg-black p-4">
@@ -92,17 +100,30 @@ export default function DealerPage() {
       <main className="flex h-full w-full flex-col">
         <div className="flex-grow">
           <PokerTable
-            players={game.handState?.players || []}
+            players={game.handState?.players || game.players.map(p => ({
+                id: p.id,
+                name: p.name,
+                seat: p.seat!,
+                stack: p.transactions.reduce((acc, t) => acc + t.amount, 0),
+                bet: 0,
+                hasActed: false,
+                isFolded: false,
+                isAllIn: false,
+            }))}
             dealerId={game.dealerId}
             activePlayerId={game.handState?.activePlayerId}
             communityCards={game.handState?.communityCards}
             pot={game.handState?.pot}
+            smallBlindPlayerId={game.handState?.smallBlindPlayerId}
+            bigBlindPlayerId={game.handState?.bigBlindPlayerId}
+            onSetDealer={(playerId) => updateGame({ dealerId: playerId })}
           />
         </div>
         <div className="w-full shrink-0">
           <DealerControls 
             game={game} 
-            onUpdateHand={updateHandState} 
+            onUpdateHand={updateHandState}
+            onUpdateGame={updateGame}
           />
         </div>
       </main>

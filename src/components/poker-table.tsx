@@ -11,6 +11,9 @@ interface PokerTableProps {
   activePlayerId?: string | null;
   communityCards?: Card[];
   pot?: number;
+  smallBlindPlayerId?: string | null;
+  bigBlindPlayerId?: string | null;
+  onSetDealer?: (playerId: string) => void;
 }
 
 const suitSymbols: Record<Suit, string> = {
@@ -52,7 +55,16 @@ const CardComponent: React.FC<{ card: Card, isFaceDown?: boolean }> = ({ card, i
 );
 
 
-const PokerTable: React.FC<PokerTableProps> = ({ players, dealerId, activePlayerId, communityCards = [], pot = 0 }) => {
+const PokerTable: React.FC<PokerTableProps> = ({ 
+    players, 
+    dealerId, 
+    activePlayerId, 
+    communityCards = [], 
+    pot = 0,
+    smallBlindPlayerId,
+    bigBlindPlayerId,
+    onSetDealer
+}) => {
   const getSeatPosition = (index: number, totalPlayers: number) => {
     // Starts from top and goes clockwise
     const angle = -Math.PI / 2 + (index / totalPlayers) * 2 * Math.PI;
@@ -96,6 +108,9 @@ const PokerTable: React.FC<PokerTableProps> = ({ players, dealerId, activePlayer
         const { left, top } = getSeatPosition(index, sortedPlayers.length);
         const isDealer = player.id === dealerId;
         const isActive = player.id === activePlayerId;
+        const isSB = player.id === smallBlindPlayerId;
+        const isBB = player.id === bigBlindPlayerId;
+
         return (
           <div
             key={player.id}
@@ -112,10 +127,11 @@ const PokerTable: React.FC<PokerTableProps> = ({ players, dealerId, activePlayer
             <div
               className={cn(
                 "w-24 h-24 rounded-full bg-card border-2 border-primary/50 flex flex-col items-center justify-center p-1 text-center shadow-lg transition-all duration-300",
-                isDealer && "border-accent ring-2 ring-accent",
                 isActive && "ring-4 ring-primary shadow-primary/50 scale-110",
-                player.isFolded && "opacity-40"
+                player.isFolded && "opacity-40",
+                onSetDealer && "cursor-pointer hover:border-accent"
               )}
+              onClick={() => onSetDealer?.(player.id)}
             >
               <User className="h-5 w-5 text-primary" />
               <span className="text-sm font-bold w-20 truncate text-foreground">
@@ -134,11 +150,23 @@ const PokerTable: React.FC<PokerTableProps> = ({ players, dealerId, activePlayer
                 </div>
             )}
             
-            {isDealer && (
-                <div className="absolute -bottom-3 w-6 h-6 bg-accent text-accent-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
-                    D
-                </div>
-            )}
+            <div className="absolute -bottom-3 w-14 flex justify-center items-center gap-1">
+                {isDealer && (
+                    <div className="w-6 h-6 bg-accent text-accent-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
+                        D
+                    </div>
+                )}
+                 {isSB && (
+                    <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
+                        SB
+                    </div>
+                )}
+                 {isBB && (
+                    <div className="w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
+                        BB
+                    </div>
+                )}
+            </div>
           </div>
         );
       })}
