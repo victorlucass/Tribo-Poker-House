@@ -85,14 +85,14 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
     setWinningHand('');
   };
 
-  const handleAdvancePhase = (currentState: HandState) => {
-    const betsCollectedState = collectBets(currentState);
-    const nextPhaseState = advanceHandPhase(betsCollectedState, game.dealerId!);
+  const handleAdvancePhase = (currentState: HandState, skipBetCollection = false) => {
+    const stateToAdvance = skipBetCollection ? currentState : collectBets(currentState);
+    const nextPhaseState = advanceHandPhase(stateToAdvance, game.dealerId!);
     onUpdateHand(nextPhaseState);
   };
   
   const processEndOfRound = (updatedHandState: HandState) => {
-     // Scenario 1: Only one player left who hasn't folded
+     // Scenario 1: Only one player left who hasn't folded. They win immediately.
     const activePlayers = updatedHandState.players.filter(p => !p.isFolded);
     if (activePlayers.length === 1) {
         const winner = activePlayers[0];
@@ -104,18 +104,33 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
         return;
     }
 
-    // Scenario 2: Betting round is over, advance the phase
+    // Scenario 2: Betting round is over, check for auto-showdown or advance phase.
     if (checkEndOfBettingRound(updatedHandState)) {
-        if (updatedHandState.phase === 'RIVER' || updatedHandState.phase === 'SHOWDOWN') {
-            onUpdateHand({ ...collectBets(updatedHandState), phase: 'SHOWDOWN' });
-            toast({ title: "Showdown!", description: "Rodada de apostas finalizada. Declare o vencedor."});
-        } else {
-            handleAdvancePhase(updatedHandState);
+        const playersNotInAllIn = activePlayers.filter(p => !p.isAllIn);
+
+        // Auto-showdown condition: 1 or 0 players can still bet. The rest are all-in.
+        if (playersNotInAllIn.length <= 1) {
+            let finalState = collectBets(updatedHandState);
+            // Fast-forward to river
+            while(finalState.phase !== 'RIVER' && finalState.phase !== 'SHOWDOWN') {
+                finalState = advanceHandPhase(finalState, game.dealerId!, true);
+            }
+            onUpdateHand({ ...finalState, phase: 'SHOWDOWN' });
+            toast({ title: "Showdown Automático!", description: "Todas as apostas estão concluídas. Declare o vencedor."});
+        } 
+        // Standard end-of-round: advance to next phase (Flop, Turn, River).
+        else {
+            if (updatedHandState.phase === 'RIVER') {
+                onUpdateHand({ ...collectBets(updatedHandState), phase: 'SHOWDOWN' });
+                toast({ title: "Showdown!", description: "Rodada de apostas finalizada. Declare o vencedor."});
+            } else {
+                handleAdvancePhase(updatedHandState);
+            }
         }
         return;
     }
 
-    // Scenario 3: Betting continues, just update the state
+    // Scenario 3: Betting continues, just update the state with the next player to act.
     onUpdateHand(updatedHandState);
   }
 

@@ -135,8 +135,8 @@ export function collectBets(handState: HandState): HandState {
     let lastAllInAmount = 0;
     allInPlayers.forEach(allInPlayer => {
       const allInTotalBet = allInPlayer.bet;
-      const potAmountForThisAllIn = (allInTotalBet - lastAllInAmount) * playersInHand.filter(p => p.bet >= allInTotalBet).length;
-      
+      if (allInTotalBet <= lastAllInAmount) return;
+
       const playersContributingToPot = playersInHand.map(p => {
           const contribution = Math.min(p.bet, allInTotalBet) - lastAllInAmount;
           return {playerId: p.id, contribution};
@@ -145,7 +145,7 @@ export function collectBets(handState: HandState): HandState {
       const totalPotForThisSlice = playersContributingToPot.reduce((sum, p) => sum + p.contribution, 0);
 
       const eligiblePlayers = playersInHand
-          .filter(p => p.bet >= allInTotalBet || p.isAllIn && p.bet === allInTotalBet)
+          .filter(p => p.bet >= allInTotalBet || (p.isAllIn && p.bet >= lastAllInAmount))
           .map(p => p.id);
 
       pots.push({
@@ -156,7 +156,7 @@ export function collectBets(handState: HandState): HandState {
       lastAllInAmount = allInTotalBet;
     });
 
-    const highestAllInBet = Math.max(...allInPlayers.map(p => p.bet));
+    const highestAllInBet = Math.max(...allInPlayers.map(p => p.bet), 0);
     const remainingBet = Math.max(...activeBettors.map(p => p.bet), 0);
     
     if (remainingBet > highestAllInBet) {
@@ -170,19 +170,24 @@ export function collectBets(handState: HandState): HandState {
   } else {
     // No all-in players, simple pot collection
     const potAmount = players.reduce((sum, p) => sum + p.bet, 0);
-    if (pots.length === 0) {
-        pots.push({ amount: 0, eligiblePlayerIds: playersInHand.filter(p=>!p.isFolded).map(p => p.id) });
+    if (potAmount > 0) {
+        if (pots.length === 0) {
+            pots.push({ amount: 0, eligiblePlayerIds: playersInHand.filter(p=>!p.isFolded).map(p => p.id) });
+        }
+        pots[pots.length - 1].amount += potAmount;
     }
-    pots[pots.length - 1].amount += potAmount;
   }
   
+  // This is a sanity check. If pot calculation is complex and fails, fall back to a simple sum.
   const totalPotValue = pots.reduce((acc, p) => acc + p.amount, 0);
   const totalBetValue = players.reduce((acc, p) => acc + p.bet, 0);
-  
-  if (Math.abs(totalPotValue - (handState.pots.reduce((acc,p) => acc+p.amount,0) + totalBetValue)) > 0.01) {
+  const previousPotsValue = handState.pots.reduce((acc,p) => acc+p.amount,0);
+
+  if (Math.abs(totalPotValue - (previousPotsValue + totalBetValue)) > 0.01) {
+       console.warn("Complex pot calculation failed. Falling back to simple sum.");
        const potAmount = players.reduce((sum, p) => sum + p.bet, 0);
        const mainPot = {
-           amount: potAmount + handState.pots.reduce((acc, p) => acc + p.amount, 0),
+           amount: potAmount + previousPotsValue,
            eligiblePlayerIds: players.filter(p => !p.isFolded).map(p => p.id)
        };
        pots = [mainPot];
@@ -190,7 +195,7 @@ export function collectBets(handState: HandState): HandState {
 
 
   // Reset player bets for the next round
-  const newPlayers = players.map(p => ({ ...p, bet: 0 }));
+  const newPlayers = players.map(p => ({ ...p, bet: 0, hasActed: false }));
 
   return { ...handState, pots, players: newPlayers, lastRaise: 0 };
 }
@@ -216,6 +221,9 @@ export function awardPotToWinner(handState: HandState, gamePlayers: CashGamePlay
         // A more complex system might track chips won/lost separately.
         const updatedTransactions = [...gp.transactions];
         if (updatedTransactions.length > 0) {
+            // This is a destructive update, replacing all transactions with a single one representing the new stack.
+            // A better approach would be to add a "win" or "loss" transaction.
+            // For now, this keeps the stack simple.
             const newTransaction = { id: 1, type: 'buy-in' as const, amount: newStack, chips: [] }; // Chips are not recalculated here.
             return { ...gp, transactions: [newTransaction] };
         }
@@ -225,7 +233,7 @@ export function awardPotToWinner(handState: HandState, gamePlayers: CashGamePlay
 }
 
 
-export function advanceHandPhase(handState: HandState, dealerId: string): HandState {
+export function advanceHandPhase(handState: HandState, dealerId: string, allInShowdown = false): HandState {
     const deck = handState.deck || shuffleDeck(createDeck());
     const newCommunityCards = [...handState.communityCards];
 
@@ -253,6 +261,18 @@ export function advanceHandPhase(handState: HandState, dealerId: string): HandSt
     } else if (handState.phase === 'RIVER') {
         nextPhase = 'SHOWDOWN';
     }
+
+    if (allInShowdown) {
+      const cardsToDeal = 5 - newCommunityCards.length;
+      if (cardsToDeal > 0 && deck.length >= cardsToDeal) {
+        for(let i=0; i<cardsToDeal; i++) {
+          if (i === 0 || i === 1 || i === 3) deck.pop(); // Burn before flop, turn, river
+          newCommunityCards.push(deck.pop()!);
+        }
+      }
+      nextPhase = 'SHOWDOWN';
+    }
+
 
     // After a betting round, the first player to act is the first active player to the left of the dealer button.
     const sortedPlayers = [...handState.players].sort((a,b) => a.seat - b.seat);
