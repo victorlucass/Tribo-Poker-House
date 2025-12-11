@@ -128,6 +128,7 @@
         "requests": { "type": "array", "items": { "$ref": "#/entities/JoinRequest" } },
         "positionsSet": { "type": "boolean" },
         "dealerId": { "type": ["string", "null"] },
+        "croupierId": { "type": ["string", "null"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "handState": { "$ref": "#/entities/HandState" }
       }
@@ -252,3 +253,5 @@
     "reasoning": "The Firestore data structure is designed to manage Texas Hold'em poker tournaments and cash games, focusing on configurability, real-time updates, and a clear separation of concerns. The structure emphasizes authorization independence, clarity, and performance.\n\n**Authorization Independence:**  Authorization is path-based. There is no reliance on `get()` calls within security rules.\n\n**Structure:**\n\n*   **/tournaments/{tournamentId}:** Stores tournament-level information.\n*   **/cashGames/{gameId}:** Stores cash game information, including an embedded `handState` object to manage the state of the current hand in real-time.\n\n**Denormalization:**\n\n*   The `handState` object within `/cashGames/{gameId}` is a form of denormalization. It keeps all data related to the active hand in one document, allowing for efficient real-time updates and reads from a single document listener, which is critical for the dealer mode functionality. This avoids complex queries across multiple collections during a fast-paced game."
   }
 }
+
+    

@@ -3,7 +3,7 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import type { CashGame, HandState } from '@/lib/types';
 import PokerTable from '@/components/poker-table';
 import DealerControls from '@/components/cash-game/dealer-controls';
@@ -12,12 +12,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DealerPage() {
   const params = useParams();
   const gameId = params.id as string;
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const { toast } = useToast();
 
   const firestore = useFirestore();
 
@@ -31,6 +33,29 @@ export default function DealerPage() {
   const [showCommunityCardAnimation, setShowCommunityCardAnimation] = useState(false);
   const [previousPhase, setPreviousPhase] = useState<string | undefined>(undefined);
 
+  // Set this user as the croupier on entering the page
+  useEffect(() => {
+    if (!gameRef || !user || !isAdmin || status !== 'success' || !game) return;
+
+    const claimCroupierSeat = async () => {
+      // Re-fetch to get latest data before updating
+      const freshGameDoc = await getDoc(gameRef);
+      if (!freshGameDoc.exists()) return;
+
+      const freshGameData = freshGameDoc.data() as CashGame;
+
+      if (!freshGameData.croupierId || freshGameData.croupierId === user.uid) {
+        updateDocumentNonBlocking(gameRef, { croupierId: user.uid });
+      }
+    };
+    claimCroupierSeat();
+    
+    // On unmount, release the croupier seat
+    return () => {
+      updateDocumentNonBlocking(gameRef, { croupierId: null });
+    };
+  }, [gameRef, user, isAdmin, status, game]);
+  
   // Monitor phase changes to trigger animations
   useEffect(() => {
     const currentPhase = game?.handState?.phase;
@@ -91,16 +116,18 @@ export default function DealerPage() {
     );
   }
   
-  // Apenas o dono da sala ou o dealer podem acessar
-  const isOwner = game.ownerId === user?.uid;
-  if (!isOwner) {
+  // Only admins can be croupiers, and only one at a time.
+  const isCroupierOccupied = game.croupierId && game.croupierId !== user?.uid;
+  if (!isAdmin || isCroupierOccupied) {
     return (
        <div className="flex h-screen items-center justify-center">
         <Card className="max-w-lg text-center">
           <CardHeader>
             <CardTitle>Acesso Negado</CardTitle>
             <CardDescription>
-             Apenas o dono da sala pode acessar o modo Croupier.
+             {isCroupierOccupied 
+                ? 'Outro administrador já está no modo Croupier. Apenas um por vez.'
+                : 'Apenas administradores podem acessar o modo Croupier.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -137,6 +164,8 @@ export default function DealerPage() {
   const getPlayerInitialStack = (playerId: string) => {
       const player = game.players.find(p => p.id === playerId);
       if (!player) return 0;
+      // This is a simplification and might not be accurate post-hand.
+      // The handState.stack should be the source of truth during a hand.
       return player.transactions.reduce((acc, t) => acc + t.amount, 0);
   }
 
@@ -161,7 +190,7 @@ export default function DealerPage() {
             pot={game.handState?.pot}
             smallBlindPlayerId={game.handState?.smallBlindPlayerId}
             bigBlindPlayerId={game.handState?.bigBlindPlayerId}
-            onSetDealer={(playerId) => updateGame({ dealerId: playerId })}
+            onSetDealer={(playerId) => canManageGame && updateGame({ dealerId: playerId })}
             showCommunityCardAnimation={showCommunityCardAnimation}
           />
         </div>
@@ -176,3 +205,5 @@ export default function DealerPage() {
     </div>
   );
 }
+
+    

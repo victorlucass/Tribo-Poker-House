@@ -110,6 +110,7 @@ export interface CashGame {
     requests: JoinRequest[];
     positionsSet: boolean;
     dealerId: string | null;
+    croupierId?: string | null; // UID of the admin currently acting as croupier
     createdAt: string; // Store as ISO string
     handState?: HandState; // Optional HandState object
 }
@@ -121,3 +122,5 @@ export interface UserProfile {
   email: string;
   role: 'admin' | 'player' | 'super_admin';
 }
+
+    

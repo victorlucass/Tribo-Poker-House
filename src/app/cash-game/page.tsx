@@ -63,6 +63,7 @@ export default function CashGameLandingPage() {
         requests: [],
         positionsSet: false,
         dealerId: null,
+        croupierId: null,
         createdAt: new Date().toISOString(),
         ownerId: user.uid,
       }, {});
@@ -210,3 +211,5 @@ export default function CashGameLandingPage() {
     </div>
   );
 }
+
+    
