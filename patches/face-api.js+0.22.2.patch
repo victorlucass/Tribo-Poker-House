@@ -1,0 +1,12 @@
+patch-package
+--- a/node_modules/face-api.js/build/common/extractWeightsFactory.js
++++ b/node_modules/face-api.js/build/common/extractWeightsFactory.js
+@@ -3,7 +3,7 @@
+ function extractWeightsFactory(weights) {
+     var remainingWeights = weights;
+     function extract(numWeights) {
+-        var ret = remainingWeights.slice(0, numWeights);
++        var ret = new Float32Array(remainingWeights.buffer.slice(0, numWeights * 4));
+         remainingWeights = remainingWeights.slice(numWeights);
+         return ret;
+     }
