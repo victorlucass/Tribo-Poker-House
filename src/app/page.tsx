@@ -23,8 +23,8 @@ export default function Home() {
     });
   };
 
-  // Mostra o skeleton enquanto o Firebase Auth está inicializando
-  if (loading || !user) {
+  // Mostra o skeleton enquanto o AuthProvider está trabalhando
+  if (loading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-8">
         <div className="text-center mb-12">

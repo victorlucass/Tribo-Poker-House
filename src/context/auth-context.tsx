@@ -24,7 +24,6 @@ const FullScreenLoader = () => (
     </div>
 );
 
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user: firebaseUser, isUserLoading } = useFirebaseUser();
   const firestore = useFirestore();
@@ -86,11 +85,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [loading, userProfile, pathname, router]);
 
-
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
   const publicPaths = ['/login', '/signup', '/facial-login'];
   const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
-
+  
   // While loading, if we are on a protected path, show a full screen loader.
   if (loading && !isPublicPath) {
     return <FullScreenLoader />;
