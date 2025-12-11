@@ -5,7 +5,8 @@ import CashGameManager from '@/components/cash-game-manager';
 
 export default function CashGameRoomPage({ params }: { params: { id: string } }) {
   // Usando React.use() para acessar o parâmetro de forma síncrona
-  const { id } = params;
+  const resolvedParams = React.use(params);
+  const id = resolvedParams.id;
 
   if (!id) {
     return null;
