@@ -1,123 +1,91 @@
 /**
- * @file firestore.rules
- * @description Security rules for a Texas Hold'em poker tournament management application.
+ * Core Philosophy: This ruleset establishes a secure "read-only" environment for authenticated users.
+ * Any signed-in user can view all tournament, round, and payout structure data, which is suitable for
+ * an application where tournament information is public to its user base. Write operations (create, update, delete)
+ * are explicitly disabled across the board as a critical security measure.
  *
- * ## Core Philosophy
- * This ruleset establishes a clear security boundary between publicly accessible tournament data and private user-specific data. All global tournament-related information (tournaments, timers, prize pools) is publicly readable to allow any user or client to view ongoing or past events. However, write access to this public data is currently restricted, pending schema updates to include ownership information. User-specific data is strictly locked down, accessible only by the owning user.
+ * Data Structure: The data is organized hierarchically under a top-level `tournaments` collection.
+ * Each tournament document can contain `rounds` and `payoutStructures` subcollections, creating a clear
+ * and logical data hierarchy.
  *
- * ## Data Structure
- * The data is organized into several top-level collections:
- * - `/tournaments`: Publicly readable tournament information.
- * - `/timer_settings`: Publicly readable timer configurations. Contains a `blind_levels` subcollection.
- * - `/prize_pools`: Publicly readable prize and payout details.
- * - `/users`: Private documents for each user, secured by user ID.
+ * Key Security Decisions:
+ * - Authenticated Read-Only: All data is readable by any user who is signed in. Unauthenticated users have no access.
+ * - Writes Disabled by Default: All write operations are currently disallowed because the data models (e.g., 'Tournament')
+ *   lack an 'ownerId' or 'creatorId' field. This prevents unauthorized data modification. To enable writes, the
+ *   application's data model must be updated to include an ownership field, and these rules must be revised
+ *   to check that the user performing the write is the owner.
+ * - No User Listing: The ruleset does not include a `/users` collection, naturally preventing the listing of application users.
  *
- * ## Key Security Decisions
- * - **Public Read-Only Data**: Collections like `/tournaments` are public for read operations (`get`, `list`) but writes are disabled. This is a secure default because the data models lack an `ownerId` or `creatorId` field, making it impossible to verify who is authorized to modify a document. A TODO comment guides the developer to add this field to enable writes.
- * - **Strict User Ownership**: The `/users/{userId}` path is governed by a strict ownership model. Only the authenticated user matching the `{userId}` wildcard can read, create, update, or delete their own document.
- * - **No User Enumeration**: Listing documents in the top-level `/users` collection is explicitly disallowed to protect user privacy and prevent data scraping.
+ * Denormalization for Authorization: While not currently used due to disabled writes, the recommended pattern is
+ * to add an `ownerId` field to the `Tournament` documents. This would allow for simple, performant rules
+ * like `isOwner(resource.data.ownerId)` to secure all write operations for a tournament and its subcollections.
  *
- * ## Denormalization for Authorization
- * To create simple, performant, and secure rules, it is critical that any document that requires owner-only write access contains a denormalized ownership field (e.g., `creatorId: "user-abc"`). This ruleset anticipates this pattern for collections like `/tournaments` and will block writes until such a field is present in the schema, thus avoiding slow and costly `get()` calls to other documents for authorization.
+ * Structural Segregation: This pattern is not currently required as there is no mixed private/public data
+ * within any single collection. All data is treated as public for authenticated users.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --------------------------------
     // Helper Functions
-    // --------------------------------
 
+    /**
+     * Checks if the user is authenticated.
+     */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-    
-    function getUserRole(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.role;
-    }
-    
-    function isSuperAdmin(userId) {
-      // Check if user has a super_admin role in their user document
-      return isSignedIn() && getUserRole(userId) == 'super_admin';
-    }
-
-    function isAdmin(userId) {
-      if (!isSignedIn()) { return false; }
-      let userRole = getUserRole(userId);
-      return userRole == 'admin' || userRole == 'super_admin';
-    }
-
-    // --------------------------------
-    // Collection Rules
-    // --------------------------------
-
-    match /users/{userId} {
-      // A user can only create their own user document.
-      allow create: if isOwner(userId);
-      
-      // Any authenticated user can read any profile (e.g. to see names). List is restricted.
-      allow get: if isSignedIn();
-      // Only admins can list all users for the admin panel.
-      allow list: if isAdmin(request.auth.uid);
-      
-      // A user can update their own profile, but cannot change their own role.
-      // A Super Admin can update any profile, including roles.
-      // An Admin can update any profile, but cannot make someone a Super Admin or change another Admin.
-      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) ||
-                       (isSuperAdmin(request.auth.uid)) ||
-                       (isAdmin(request.auth.uid) && resource.data.role == 'player' && request.resource.data.role != 'super_admin');
-
-      // Owner or Super Admin can delete a user account document.
-      allow delete: if isOwner(userId) || isSuperAdmin(request.auth.uid);
-    }
-    
-    match /cashGames/{gameId} {
-      // Anyone signed in can view a cash game.
+    /**
+     * @description Top-level collection for all poker tournaments.
+     * @path /tournaments/{tournamentId}
+     * @allow (get, list) - An authenticated user can read any tournament's details.
+     * @deny (create, update, delete) - Any user attempting to write, because the schema is missing an ownership field.
+     * @principle Public read for authenticated users, with writes disabled until a secure ownership model is implemented.
+     */
+    match /tournaments/{tournamentId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
+      // CRITICAL: Cannot implement owner-only writes. The 'Tournament' entity is missing an 'ownerId' or 'creatorId' field.
+      // This prevents the rules from verifying who is authorized to create, modify, or delete a tournament.
+      // To enable writes, add an ownership field to the Tournament data model and update the rules below.
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field (e.g., request.resource.data.ownerId == request.auth.uid).
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field (e.g., resource.data.ownerId == request.auth.uid).
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field (e.g., resource.data.ownerId == request.auth.uid).
 
-      // Only authenticated admins can create a new cash game.
-      allow create: if isAdmin(request.auth.uid);
-      
-      // An admin/owner can update anything.
-      // Any signed in user can add a request to join by updating the `requests` array.
-      allow update: if (isAdmin(request.auth.uid) || isOwner(resource.data.ownerId)) ||
-                       (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']));
-      
-      // Only the owner or an admin can delete the game
-      allow delete: if isAdmin(request.auth.uid) || isOwner(resource.data.ownerId);
-    }
-
-    match /tournaments/{tournamentId} {
-      allow get, list: if true;
-      allow create: if false; 
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    match /timer_settings/{timerSettingsId} {
-      allow get, list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
-
-      match /blind_levels/{blindLevelId} {
-        allow get, list: if true;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      /**
+       * @description Stores the blind structure and duration for each round within a tournament.
+       * @path /tournaments/{tournamentId}/rounds/{roundId}
+       * @allow (get, list) - An authenticated user can read the rounds for any tournament.
+       * @deny (create, update, delete) - Any user attempting to write, because the parent tournament lacks an ownership model.
+       * @principle Inherits the security posture of its parent. Read access is for authenticated users, and writes are disabled.
+       */
+      match /rounds/{roundId} {
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        // CRITICAL: Writes to subcollections must be authorized by checking ownership on the parent document.
+        // Since the parent /tournaments/{tournamentId} document lacks an ownership field, writes must be disabled here as well.
+        allow create: if false; // TODO: Use get() to check ownership on the parent tournament document once it has an ownerId field.
+        allow update: if false; // TODO: Use get() to check ownership on the parent tournament document once it has an ownerId field.
+        allow delete: if false; // TODO: Use get() to check ownership on the parent tournament document once it has an ownerId field.
       }
-    }
 
-    match /prize_pools/{prizePoolId} {
-      allow get, list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      /**
+       * @description Stores the prize pool distribution for a tournament.
+       * @path /tournaments/{tournamentId}/payoutStructures/{payoutStructureId}
+       * @allow (get, list) - An authenticated user can read the payout structure for any tournament.
+       * @deny (create, update, delete) - Any user attempting to write, because the parent tournament lacks an ownership model.
+       * @principle Inherits the security posture of its parent. Read access is for authenticated users, and writes are disabled.
+       */
+      match /payoutStructures/{payoutStructureId} {
+        allow get: if isSignedIn();
+        allow list: if isSignedIn();
+        // CRITICAL: Writes to subcollections must be authorized by checking ownership on the parent document.
+        // Since the parent /tournaments/{tournamentId} document lacks an ownership field, writes must be disabled here as well.
+        allow create: if false; // TODO: Use get() to check ownership on the parent tournament document once it has an ownerId field.
+        allow update: if false; // TODO: Use get() to check ownership on the parent tournament document once it has an ownerId field.
+        allow delete: if false; // TODO: Use get() to check ownership on the parent tournament document once it has an ownerId field.
+      }
     }
   }
 }
