@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [auth, toast]);
 
   useEffect(() => {
-    // Still waiting for Firebase Auth to initialize and check the user's status.
+    // 1. We are still waiting for Firebase to tell us if a user is logged in or not.
     if (isUserLoading) {
       setLoading(true);
       return;
@@ -56,46 +56,52 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const isPublicPath = ['/login', '/signup'].includes(pathname);
 
-    // If no user is logged in
+    // 2. Firebase has responded: There is NO user.
     if (!firebaseUser) {
       setUserProfile(null);
+      // If we are not on a public page, redirect to login.
       if (!isPublicPath) {
         router.push('/login');
       } else {
+        // If we are already on a public page, we can stop loading.
         setLoading(false);
       }
       return;
     }
 
-    // If a user is logged in, fetch their profile from Firestore
+    // 3. Firebase has responded: There IS a user.
+    // Let's fetch their profile from Firestore.
     const userDocRef = doc(firestore, 'users', firebaseUser.uid);
     getDoc(userDocRef)
       .then((docSnap) => {
         if (docSnap.exists()) {
-          const profile = docSnap.data() as UserProfile;
-          setUserProfile(profile);
-          // If they are on a public path (like login), redirect them to home
-          if (isPublicPath) {
-            router.push('/');
-          }
+          setUserProfile(docSnap.data() as UserProfile);
         } else {
-          // This case should be rare, but if there's an auth record without a user doc, log them out.
+          // This is a failsafe. If a user exists in Auth but not Firestore, log them out.
           console.warn(`User profile not found for UID: ${firebaseUser.uid}. Logging out.`);
           handleLogout();
         }
       })
       .catch((error) => {
         console.error('Error fetching user profile:', error);
+        toast({ variant: 'destructive', title: 'Erro de Perfil', description: 'Não foi possível carregar seu perfil.' });
         handleLogout();
       })
       .finally(() => {
-        // Only stop loading after all async operations for an authenticated user are complete.
-        setLoading(false);
+        // 4. After fetching the profile, we are truly done loading.
+        // If they were on a public path, redirect them home.
+        if (isPublicPath) {
+          router.push('/');
+        } else {
+          setLoading(false);
+        }
       });
-  }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout]);
+      
+  // We ONLY depend on these values. `pathname` and `router` can cause unwanted re-runs.
+  }, [firebaseUser, isUserLoading, firestore, handleLogout]);
 
-  const isSuperAdmin = userProfile?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-  const isAdmin = userProfile?.role === 'admin' || isSuperAdmin;
+  const isSuperAdmin = !!userProfile && userProfile.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+  const isAdmin = isSuperAdmin || (!!userProfile && userProfile.role === 'admin');
 
   const contextValue = {
     user: userProfile,
