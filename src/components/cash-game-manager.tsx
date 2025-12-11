@@ -71,7 +71,6 @@ import { useRouter } from 'next/navigation';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { useAuth } from '@/context/auth-context';
-import { getAuth, signOut } from 'firebase/auth';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -191,15 +190,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { toast } = useToast();
   const firestore = useFirestore();
   const router = useRouter();
-  const { user, isAdmin, loading: isAuthLoading } = useAuth();
-  const auth = getAuth();
-
-  const handleLogout = () => {
-    signOut(auth).then(() => {
-      toast({ title: 'Logout efetuado com sucesso.' });
-      router.push('/login');
-    });
-  };
+  const { user, isAdmin, handleLogout, loading: isAuthLoading } = useAuth();
 
   const gameRef = useMemoFirebase(() => {
     if (!firestore || !gameId) return null;
@@ -1826,5 +1817,3 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 };
 
 export default CashGameManager;
-
-    

@@ -1,17 +1,20 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useUser as useFirebaseUser, useFirestore } from '@/firebase';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { useUser as useFirebaseUser, useFirestore, useAuth as useFirebaseAuth } from '@/firebase';
 import type { UserProfile } from '@/lib/types';
 import { doc, getDoc } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  handleLogout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,14 +32,23 @@ const FullScreenLoader = () => (
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user: firebaseUser, isUserLoading } = useFirebaseUser();
   const firestore = useFirestore();
+  const auth = useFirebaseAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const { toast } = useToast();
 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const handleLogout = useCallback(() => {
+    signOut(auth).then(() => {
+      toast({ title: 'Logout efetuado com sucesso.' });
+      // The useEffect hook will handle the redirect to /login
+    });
+  }, [auth, toast]);
+
   useEffect(() => {
-    // If the firebase user is still loading, we are loading.
+    // Phase 1: Wait for Firebase Auth to be ready.
     if (isUserLoading) {
       setLoading(true);
       return;
@@ -44,64 +56,66 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const publicPaths = ['/login', '/signup'];
     const isPublicPath = publicPaths.includes(pathname);
-    
-    // If there is no firebase user and we are not on a public path, redirect to login
+
+    // Phase 2: Handle unauthenticated users.
     if (!firebaseUser) {
       setUserProfile(null);
       if (!isPublicPath) {
-        router.push('/login');
+        // Use a timeout to ensure the current component has time to unmount
+        // before the router pushes to a new page.
+        setTimeout(() => router.push('/login'), 0);
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
       return;
     }
 
-    // If there is a firebase user, but we don't have a firestore instance yet, we are loading.
+    // Phase 3: Handle authenticated users.
     if (!firestore) {
+      // This should ideally not happen if FirebaseProvider is set up correctly,
+      // but it's a safe guard.
       setLoading(true);
       return;
     }
 
-    // Fetch user profile from Firestore
     const userDocRef = doc(firestore, 'users', firebaseUser.uid);
     getDoc(userDocRef)
       .then((docSnap) => {
         if (docSnap.exists()) {
           const profile = docSnap.data() as UserProfile;
           setUserProfile(profile);
-          // If user is logged in and on a public path, redirect to home
           if (isPublicPath) {
             router.push('/');
           }
         } else {
-          // This can happen on first signup before the doc is created.
-          // Or if the user was deleted from Firestore but not from Auth.
-          console.warn(`User profile not found in Firestore for UID: ${firebaseUser.uid}. Logging out.`);
-          setUserProfile(null);
-          // signOut(getAuth()); // Consider signing out the user
-          router.push('/login');
+          console.warn(`User profile not found for UID: ${firebaseUser.uid}. Logging out.`);
+          handleLogout();
         }
       })
       .catch((error) => {
         console.error('Error fetching user profile:', error);
-        setUserProfile(null);
-        router.push('/login');
+        handleLogout();
       })
       .finally(() => {
         setLoading(false);
       });
-      
-  }, [firebaseUser, isUserLoading, firestore, pathname, router]);
+
+  }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout]);
 
   const isSuperAdmin = userProfile?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
   const isAdmin = userProfile?.role === 'admin' || isSuperAdmin;
 
-  if (loading) {
-    return <FullScreenLoader />;
-  }
-  
+  const contextValue = {
+    user: userProfile,
+    loading,
+    isAdmin,
+    isSuperAdmin,
+    handleLogout,
+  };
+
   return (
-    <AuthContext.Provider value={{ user: userProfile, loading, isAdmin, isSuperAdmin }}>
-      {children}
+    <AuthContext.Provider value={contextValue}>
+      {loading ? <FullScreenLoader /> : children}
     </AuthContext.Provider>
   );
 };

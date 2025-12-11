@@ -5,22 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Zap, Users, LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { getAuth, signOut } from 'firebase/auth';
-import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
 
 export default function Home() {
-  const { user, isSuperAdmin } = useAuth();
-  const router = useRouter();
-  const auth = getAuth();
-  const { toast } = useToast();
-
-  const handleLogout = () => {
-    signOut(auth).then(() => {
-      toast({ title: 'Logout efetuado com sucesso.' });
-      router.push('/login');
-    });
-  };
+  const { user, isSuperAdmin, handleLogout } = useAuth();
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">

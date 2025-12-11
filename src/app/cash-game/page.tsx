@@ -12,7 +12,6 @@ import { ArrowLeft, LogIn, LogOut, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import type { JoinRequest } from '@/lib/types';
-import { getAuth, signOut } from 'firebase/auth';
 
 const generateId = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -29,19 +28,11 @@ export default function CashGameLandingPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, handleLogout } = useAuth();
   const [newGameName, setNewGameName] = useState('');
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-  const auth = getAuth();
-
-  const handleLogout = () => {
-    signOut(auth).then(() => {
-      toast({ title: 'Logout efetuado com sucesso.' });
-      router.push('/login');
-    });
-  };
 
   const handleCreateGame = async () => {
     if (!newGameName.trim()) {
