@@ -203,10 +203,10 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { data: game, status, error } = useDoc<CashGame>(gameRef);
 
   const updateGame = useCallback(
-    async (data: Partial<CashGame>) => {
+    (data: Partial<CashGame>) => {
       if (!gameRef) return;
       try {
-        await updateDoc(gameRef, data);
+        updateDoc(gameRef, data);
       } catch (serverError) {
         const permissionError = new FirestorePermissionError({
           path: gameRef.path,
@@ -266,6 +266,12 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   // State for approving a player
   const [approvingPlayer, setApprovingPlayer] = useState<JoinRequest | null>(null);
   const [approvalBuyIn, setApprovalBuyIn] = useState('');
+
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const sortedChips = useMemo(() => [...chips].sort((a, b) => a.value - b.value), [chips]);
 
@@ -901,7 +907,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                       <div>
                         <p className="font-semibold">{req.userName}</p>
                         <p className="text-xs text-muted-foreground">
-                          Pedido às {new Date(req.requestedAt).toLocaleTimeString('pt-BR')}
+                          {isClient ? `Pedido às ${new Date(req.requestedAt).toLocaleTimeString('pt-BR')}` : 'Carregando...'}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1244,7 +1250,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                           <div>
                             <h4 className="font-bold">{p.name}</h4>
                             <p className="text-sm text-muted-foreground">
-                              Saiu às {new Date(p.cashedOutAt).toLocaleTimeString('pt-BR')}
+                              Saiu às {isClient ? new Date(p.cashedOutAt).toLocaleTimeString('pt-BR') : '...'}
                             </p>
                           </div>
                           <div className="text-right">
