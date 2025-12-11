@@ -4,7 +4,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import type { CashGame, HandState } from '@/lib/types';
+import type { CashGame, HandState, Pot } from '@/lib/types';
 import PokerTable from '@/components/poker-table';
 import DealerControls from '@/components/cash-game/dealer-controls';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -222,9 +222,7 @@ export default function DealerPage() {
             dealerId={game.dealerId}
             activePlayerId={game.handState?.activePlayerId}
             communityCards={game.handState?.communityCards}
-            pot={game.handState?.pot}
-            smallBlindPlayerId={game.handState?.smallBlindPlayerId}
-            bigBlindPlayerId={game.handState?.bigBlindPlayerId}
+            pots={game.handState?.pots}
             onSetDealer={(playerId) => canManageGame && updateGame({ dealerId: playerId })}
             showCommunityCardAnimation={showCommunityCardAnimation}
           />

@@ -43,17 +43,21 @@ export interface PlayerHandState {
     isAllIn: boolean;
 }
 
+export interface Pot {
+    amount: number;
+    eligiblePlayerIds: string[];
+}
+
+
 export interface HandState {
     phase: GamePhase;
-    pot: number;
+    pots: Pot[];
     communityCards: Card[];
     deck?: Card[]; // Keep track of the deck to deal cards
     activePlayerId: string | null;
     lastRaise: number;
     smallBlindAmount: number;
     bigBlindAmount: number;
-    smallBlindPlayerId: string | null;
-    bigBlindPlayerId: string | null;
     players: PlayerHandState[];
 }
 
@@ -122,5 +126,3 @@ export interface UserProfile {
   email: string;
   role: 'admin' | 'player' | 'super_admin';
 }
-
-    

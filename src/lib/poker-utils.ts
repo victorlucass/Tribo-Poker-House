@@ -1,4 +1,4 @@
-import type { Card, Rank, Suit, CashGamePlayer, HandState, PlayerHandState, GamePhase } from './types';
+import type { Card, Rank, Suit, CashGamePlayer, HandState, PlayerHandState, GamePhase, Pot } from './types';
 
 const SUITS: Suit[] = ['clubs', 'diamonds', 'hearts', 'spades'];
 const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
@@ -108,6 +108,8 @@ export function checkEndOfBettingRound(handState: HandState): boolean {
 
     // All players who are not folded or all-in must have had a chance to act.
     const playersWhoMustAct = activePlayers.filter(p => !p.isAllIn);
+    if (playersWhoMustAct.length === 0) return true; // All remaining players are all-in
+    
     const allHaveActed = playersWhoMustAct.every(p => p.hasActed);
     if (!allHaveActed) return false;
 
@@ -119,12 +121,78 @@ export function checkEndOfBettingRound(handState: HandState): boolean {
 }
 
 export function collectBets(handState: HandState): HandState {
-    let newPot = handState.pot;
-    const newPlayers = handState.players.map(p => {
-        newPot += p.bet;
-        return { ...p, bet: 0 }; // Keep hasActed for next logic step
+  const players = [...handState.players];
+  const existingPots = [...handState.pots];
+
+  const playersInHand = players.filter(p => p.bet > 0 || existingPots.some(pot => pot.eligiblePlayerIds.includes(p.id)));
+  const allInPlayers = playersInHand.filter(p => p.isAllIn).sort((a, b) => (a.stack + a.bet) - (b.stack + b.bet));
+  const activeBettors = playersInHand.filter(p => !p.isAllIn);
+
+  let pots: Pot[] = existingPots;
+
+  if (allInPlayers.length > 0) {
+    // Handle all-in scenarios by creating side pots
+    let lastAllInAmount = 0;
+    allInPlayers.forEach(allInPlayer => {
+      const allInTotalBet = allInPlayer.bet;
+      const potAmountForThisAllIn = (allInTotalBet - lastAllInAmount) * playersInHand.filter(p => p.bet >= allInTotalBet).length;
+      
+      const playersContributingToPot = playersInHand.map(p => {
+          const contribution = Math.min(p.bet, allInTotalBet) - lastAllInAmount;
+          return {playerId: p.id, contribution};
+      });
+
+      const totalPotForThisSlice = playersContributingToPot.reduce((sum, p) => sum + p.contribution, 0);
+
+      const eligiblePlayers = playersInHand
+          .filter(p => p.bet >= allInTotalBet || p.isAllIn && p.bet === allInTotalBet)
+          .map(p => p.id);
+
+      pots.push({
+          amount: totalPotForThisSlice,
+          eligiblePlayerIds: eligiblePlayers,
+      });
+
+      lastAllInAmount = allInTotalBet;
     });
-    return { ...handState, pot: newPot, players: newPlayers, lastRaise: 0 };
+
+    const highestAllInBet = Math.max(...allInPlayers.map(p => p.bet));
+    const remainingBet = Math.max(...activeBettors.map(p => p.bet), 0);
+    
+    if (remainingBet > highestAllInBet) {
+        const sidePotAmount = activeBettors.reduce((sum, p) => sum + (p.bet - highestAllInBet), 0);
+        pots.push({
+            amount: sidePotAmount,
+            eligiblePlayerIds: activeBettors.map(p => p.id),
+        });
+    }
+
+  } else {
+    // No all-in players, simple pot collection
+    const potAmount = players.reduce((sum, p) => sum + p.bet, 0);
+    if (pots.length === 0) {
+        pots.push({ amount: 0, eligiblePlayerIds: playersInHand.filter(p=>!p.isFolded).map(p => p.id) });
+    }
+    pots[pots.length - 1].amount += potAmount;
+  }
+  
+  const totalPotValue = pots.reduce((acc, p) => acc + p.amount, 0);
+  const totalBetValue = players.reduce((acc, p) => acc + p.bet, 0);
+  
+  if (Math.abs(totalPotValue - (handState.pots.reduce((acc,p) => acc+p.amount,0) + totalBetValue)) > 0.01) {
+       const potAmount = players.reduce((sum, p) => sum + p.bet, 0);
+       const mainPot = {
+           amount: potAmount + handState.pots.reduce((acc, p) => acc + p.amount, 0),
+           eligiblePlayerIds: players.filter(p => !p.isFolded).map(p => p.id)
+       };
+       pots = [mainPot];
+  }
+
+
+  // Reset player bets for the next round
+  const newPlayers = players.map(p => ({ ...p, bet: 0 }));
+
+  return { ...handState, pots, players: newPlayers, lastRaise: 0 };
 }
 
 
@@ -132,7 +200,7 @@ export function awardPotToWinner(handState: HandState, gamePlayers: CashGamePlay
     const winnerInHand = handState.players.find(p => p.id === winnerId);
     if (!winnerInHand) return gamePlayers;
 
-    const totalPot = handState.pot; // Assumes pot is already collected
+    const totalPot = handState.pots.reduce((sum, p) => sum + p.amount, 0); 
 
     return gamePlayers.map(gp => {
         const playerInHand = handState.players.find(p => p.id === gp.id);
@@ -146,8 +214,8 @@ export function awardPotToWinner(handState: HandState, gamePlayers: CashGamePlay
         // Find the most recent transaction and update its amount to reflect the new stack
         const updatedTransactions = [...gp.transactions].sort((a,b) => b.id - a.id);
         if(updatedTransactions.length > 0) {
-            // Instead of modifying, we replace the transaction array with one that represents the final state.
-            // This is a simplification. A better model would have a separate 'stack' field on the root CashGamePlayer.
+            // This simplification assumes the entire stack is from one "buy-in" transaction.
+            // A more robust system might track stack separately from transactions.
             const newTransaction = { id: 1, type: 'buy-in' as const, amount: newStack, chips: [] };
              return { ...gp, transactions: [newTransaction] };
         }
@@ -166,16 +234,22 @@ export function advanceHandPhase(handState: HandState, dealerId: string): HandSt
     // Burn card and deal
     if (handState.phase === 'PRE_FLOP') {
         nextPhase = 'FLOP';
-        deck.pop(); // Burn
-        newCommunityCards.push(deck.pop()!, deck.pop()!, deck.pop()!);
+        if(deck.length > 3) {
+            deck.pop(); // Burn
+            newCommunityCards.push(deck.pop()!, deck.pop()!, deck.pop()!);
+        }
     } else if (handState.phase === 'FLOP') {
         nextPhase = 'TURN';
-        deck.pop(); // Burn
-        newCommunityCards.push(deck.pop()!);
+         if(deck.length > 1) {
+            deck.pop(); // Burn
+            newCommunityCards.push(deck.pop()!);
+        }
     } else if (handState.phase === 'TURN') {
         nextPhase = 'RIVER';
-        deck.pop(); // Burn
-        newCommunityCards.push(deck.pop()!);
+        if(deck.length > 1) {
+            deck.pop(); // Burn
+            newCommunityCards.push(deck.pop()!);
+        }
     } else if (handState.phase === 'RIVER') {
         nextPhase = 'SHOWDOWN';
     }
@@ -185,13 +259,16 @@ export function advanceHandPhase(handState: HandState, dealerId: string): HandSt
     const dealerSeatIndex = sortedPlayers.findIndex(p => p.id === dealerId);
     
     let firstToAct: PlayerHandState | null = null;
-    for(let i = 1; i <= sortedPlayers.length; i++) {
-        const p = sortedPlayers[(dealerSeatIndex + i) % sortedPlayers.length];
-        if(p && !p.isFolded && !p.isAllIn) {
-            firstToAct = p;
-            break;
+    if(dealerSeatIndex !== -1) {
+        for(let i = 1; i <= sortedPlayers.length; i++) {
+            const p = sortedPlayers[(dealerSeatIndex + i) % sortedPlayers.length];
+            if(p && !p.isFolded && !p.isAllIn) {
+                firstToAct = p;
+                break;
+            }
         }
     }
+
 
     return {
         ...handState,
@@ -211,30 +288,40 @@ export function startNewHand(players: CashGamePlayer[], currentDealerId: string,
 
     const sortedPlayersBySeat = [...players].sort((a, b) => a.seat! - b.seat!);
     
-    // Determine the next dealer
-    const currentDealerSeatIndex = sortedPlayersBySeat.findIndex(p => p.id === currentDealerId);
-    let nextDealerIndex = (currentDealerSeatIndex + 1) % sortedPlayersBySeat.length;
+    const findNextPlayerIndex = (startIndex: number): number => {
+        let currentIndex = startIndex;
+        let loops = 0;
+        while(loops < sortedPlayersBySeat.length) {
+            currentIndex = (currentIndex + 1) % sortedPlayersBySeat.length;
+            const player = sortedPlayersBySeat[currentIndex];
+            if (player) return currentIndex; // Found next player
+            loops++;
+        }
+        return startIndex; // Fallback to original if no other player
+    }
+
+    const currentDealerIndex = sortedPlayersBySeat.findIndex(p => p.id === currentDealerId);
+    const nextDealerIndex = findNextPlayerIndex(currentDealerIndex);
     const nextDealer = sortedPlayersBySeat[nextDealerIndex];
 
     const findNextActivePlayerIndex = (startIndex: number): number => {
         let currentIndex = startIndex;
         let loops = 0;
         while(loops < sortedPlayersBySeat.length) {
-            currentIndex = (currentIndex + 1) % sortedPlayersBySeat.length;
             const player = sortedPlayersBySeat[currentIndex];
             if (player && player.transactions.reduce((acc, t) => acc + t.amount, 0) > 0) {
                 return currentIndex;
             }
+            currentIndex = (currentIndex + 1) % sortedPlayersBySeat.length;
             loops++;
         }
         return -1; // No active players found
     }
 
-    const dealerActualIndex = sortedPlayersBySeat.findIndex(p => p.id === nextDealer.id);
-    const smallBlindIndex = findNextActivePlayerIndex(dealerActualIndex);
+    const smallBlindIndex = findNextActivePlayerIndex(nextDealerIndex);
     const bigBlindIndex = findNextActivePlayerIndex(smallBlindIndex);
     const firstToActIndex = findNextActivePlayerIndex(bigBlindIndex);
-
+    
     if (smallBlindIndex === -1 || bigBlindIndex === -1 || firstToActIndex === -1) {
         throw new Error("Could not determine blinds or first player to act. Check player stacks.");
     }
@@ -248,7 +335,6 @@ export function startNewHand(players: CashGamePlayer[], currentDealerId: string,
         return player.transactions.reduce((acc, t) => acc + t.amount, 0);
     }
     
-    let tempPot = 0;
     const playerHandStates: PlayerHandState[] = sortedPlayersBySeat.map(p => {
         const stack = getPlayerStack(p);
         let bet = 0;
@@ -263,8 +349,6 @@ export function startNewHand(players: CashGamePlayer[], currentDealerId: string,
             if (bet === stack) isAllIn = true;
         }
         
-        tempPot += bet;
-        
         return {
             id: p.id,
             name: p.name,
@@ -273,7 +357,7 @@ export function startNewHand(players: CashGamePlayer[], currentDealerId: string,
             bet: bet,
             card1: deck.pop(),
             card2: deck.pop(),
-            hasActed: false,
+            hasActed: p.id === bigBlindPlayer.id, // Big blind has option
             isFolded: false,
             isAllIn: isAllIn,
         };
@@ -281,15 +365,13 @@ export function startNewHand(players: CashGamePlayer[], currentDealerId: string,
 
     const handState: HandState = {
         phase: 'PRE_FLOP',
-        pot: 0, // Pot will be collected at end of betting round
+        pots: [],
         communityCards: [],
         deck: deck,
         activePlayerId: firstToActPlayer.id,
         lastRaise: bigBlind,
         smallBlindAmount: smallBlind,
         bigBlindAmount: bigBlind,
-        smallBlindPlayerId: smallBlindPlayer.id,
-        bigBlindPlayerId: bigBlindPlayer.id,
         players: playerHandStates,
     };
 

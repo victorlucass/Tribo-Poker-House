@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import type { PlayerHandState, Card, Suit, Rank } from '@/lib/types';
+import type { PlayerHandState, Card, Suit, Rank, Pot } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { User, Dices, Flame } from 'lucide-react';
 
@@ -10,9 +10,7 @@ interface PokerTableProps {
   dealerId?: string | null;
   activePlayerId?: string | null;
   communityCards?: Card[];
-  pot?: number;
-  smallBlindPlayerId?: string | null;
-  bigBlindPlayerId?: string | null;
+  pots?: Pot[];
   onSetDealer?: (playerId: string) => void;
   showCommunityCardAnimation?: boolean;
 }
@@ -67,9 +65,7 @@ const PokerTable: React.FC<PokerTableProps> = ({
     dealerId, 
     activePlayerId, 
     communityCards = [], 
-    pot = 0,
-    smallBlindPlayerId,
-    bigBlindPlayerId,
+    pots = [],
     onSetDealer,
     showCommunityCardAnimation = false,
 }) => {
@@ -84,7 +80,8 @@ const PokerTable: React.FC<PokerTableProps> = ({
   
   const sortedPlayers = [...players].sort((a, b) => a.seat! - b.seat!);
   const currentBetsValue = players.reduce((acc, p) => acc + p.bet, 0);
-  const totalPotValue = pot + currentBetsValue;
+  const mainPotValue = pots.reduce((acc, p) => acc + p.amount, 0);
+  const totalPotValue = mainPotValue + currentBetsValue;
 
   return (
     <div className="relative w-full aspect-[2/1] max-w-5xl mx-auto my-8 bg-background rounded-lg p-4">
@@ -118,8 +115,8 @@ const PokerTable: React.FC<PokerTableProps> = ({
         const { left, top } = getSeatPosition(index, sortedPlayers.length);
         const isDealer = player.id === dealerId;
         const isActive = player.id === activePlayerId;
-        const isSB = player.id === smallBlindPlayerId;
-        const isBB = player.id === bigBlindPlayerId;
+        // The small/big blind is not directly on the PokerTable anymore, but we can derive it if needed
+        // This is a simplification; in a real app, you might pass SB/BB IDs down.
 
         return (
           <div
@@ -169,16 +166,6 @@ const PokerTable: React.FC<PokerTableProps> = ({
                 {isDealer && (
                     <div className="w-6 h-6 bg-accent text-accent-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
                         D
-                    </div>
-                )}
-                 {isSB && (
-                    <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
-                        SB
-                    </div>
-                )}
-                 {isBB && (
-                    <div className="w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
-                        BB
                     </div>
                 )}
             </div>

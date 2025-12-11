@@ -55,11 +55,7 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
   const handleEndHandWithWinner = () => {
     if(!handState || !selectedWinnerId) return;
     
-    // Create a temporary state that includes the current bets for the award calculation
-    const finalHandStateForAward = {
-        ...handState,
-        pot: handState.pot + handState.players.reduce((acc, p) => acc + p.bet, 0)
-    };
+    const finalHandStateForAward = collectBets(handState);
 
     const updatedPlayers = awardPotToWinner(finalHandStateForAward, game.players, selectedWinnerId);
 
@@ -80,7 +76,7 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
     const activePlayers = updatedHandState.players.filter(p => !p.isFolded);
     if (activePlayers.length === 1) {
         const winner = activePlayers[0];
-        const finalState = { ...updatedHandState, pot: updatedHandState.pot + updatedHandState.players.reduce((s, p) => s + p.bet, 0) };
+        const finalState = collectBets(updatedHandState);
         const updatedGamePlayers = awardPotToWinner(finalState, game.players, winner.id);
         toast({ title: "Fim da Mão!", description: `${winner.name} venceu o pote pois todos desistiram.`});
         onUpdateGame({ players: updatedGamePlayers });
@@ -91,7 +87,7 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
     // Scenario 2: Betting round is over, advance the phase
     if (checkEndOfBettingRound(updatedHandState)) {
         if (updatedHandState.phase === 'RIVER' || updatedHandState.phase === 'SHOWDOWN') {
-            onUpdateHand({ ...updatedHandState, phase: 'SHOWDOWN' });
+            onUpdateHand({ ...collectBets(updatedHandState), phase: 'SHOWDOWN' });
             toast({ title: "Showdown!", description: "Rodada de apostas finalizada. Declare o vencedor."});
         } else {
             handleAdvancePhase(updatedHandState);
@@ -106,7 +102,6 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
   const handlePlayerAction = (action: 'fold' | 'check-call' | 'bet' | 'all-in', amount?: number) => {
     if (!handState || !activePlayer) return;
     
-    let newPot = handState.pot;
     const newPlayers = [...handState.players];
     const activePlayerIndex = newPlayers.findIndex(p => p.id === activePlayer.id);
     if(activePlayerIndex === -1) return;
@@ -195,6 +190,7 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
   }
 
   const potentialWinners = handState.players.filter(p => !p.isFolded);
+  const totalPotValue = handState.pots.reduce((sum, pot) => sum + pot.amount, 0) + handState.players.reduce((sum, p) => sum + p.bet, 0);
 
   return (
     <Card className="bg-gray-900/80 border-gray-700 text-white">
@@ -213,8 +209,7 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
                     </DialogHeader>
                     <div className="my-4 space-y-2">
                         <p className="text-center text-lg">Pote Total: <span className="font-bold text-primary">{
-                           (handState.pot + handState.players.reduce((acc, p) => acc + p.bet, 0))
-                           .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                           totalPotValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                         }</span></p>
                         <div className="grid grid-cols-2 gap-2">
                            {potentialWinners.map(p => (
