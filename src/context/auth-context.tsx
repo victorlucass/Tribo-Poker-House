@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   }, [firebaseUser, isFirebaseUserLoading, firestore]);
 
-  const isAdmin = userProfile?.role === 'admin';
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
 
   return (
     <AuthContext.Provider value={{ user: userProfile, loading, isAdmin }}>

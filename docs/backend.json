@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Tournament": {
@@ -199,7 +200,7 @@
         },
         "role": {
           "type": "string",
-          "enum": ["admin", "player"],
+          "enum": ["root", "admin", "player"],
           "description": "The user's role in the application."
         }
       },

@@ -9,22 +9,35 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
     
+    function isRoot() {
+      return getUserData(request.auth.uid).role == 'root';
+    }
+
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      let userRole = getUserData(request.auth.uid).role;
+      return userRole == 'admin' || userRole == 'root';
     }
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if false; 
+      // Only root can create other admins. Admins can't create users.
+      allow create: if isOwner(userId) || (isRoot() && request.resource.data.role == 'admin');
+      // Root can edit any user. Admins/players can only edit themselves.
+      // An admin cannot edit another user.
+      allow update: if isRoot() || isOwner(userId);
+      // Only root can delete users, but not the root user itself.
+      allow delete: if isRoot() && request.auth.uid != userId; 
     }
 
     match /cashGames/{gameId} {
       allow read: if isSignedIn();
       allow create: if isAdmin(); // Only admins can create a game
-      allow update: if isAdmin();
+      allow update: if isAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']);
       allow delete: if isAdmin();
     }
   }

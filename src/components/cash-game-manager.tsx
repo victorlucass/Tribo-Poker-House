@@ -224,6 +224,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const players = game?.players ?? [];
   const cashedOutPlayers = game?.cashedOutPlayers ?? [];
   const positionsSet = game?.positionsSet ?? false;
+  const requests = game?.requests ?? [];
   
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerBuyIn, setNewPlayerBuyIn] = useState('');
@@ -243,7 +244,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const [transactionDetails, setTransactionDetails] = useState<{
     type: 'buy-in' | 'rebuy';
     amount: number;
-    playerId?: number;
+    playerId?: string;
     playerName?: string;
   } | null>(null);
   const [manualChipCounts, setManualChipCounts] = useState<Map<number, number>>(new Map());
@@ -277,9 +278,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     toast({ title: 'Posições Definidas!', description: `O dealer é ${dealer?.name}.` });
   };
   
-  const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy') => {
+  const handleOpenDistributionModal = (type: 'buy-in' | 'rebuy', playerId?: string, playerName?: string) => {
     let amount: number;
-    let details: { type: 'buy-in' | 'rebuy'; amount: number; playerId?: number; playerName?: string };
+    let details: { type: 'buy-in' | 'rebuy'; amount: number; playerId?: string; playerName?: string };
 
     if (type === 'buy-in') {
       if (!newPlayerName || !newPlayerBuyIn) {
@@ -287,7 +288,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
         return;
       }
       amount = parseFloat(newPlayerBuyIn);
-      details = { type: 'buy-in', amount, playerName: newPlayerName };
+      details = { type: 'buy-in', amount, playerId: newPlayerName, playerName: newPlayerName }; // Use name as temporary ID
     } else {
       if (!playerForDetails || !rebuyAmount) {
         toast({ variant: 'destructive', title: 'Erro', description: 'Selecione um jogador e insira um valor.' });
@@ -359,12 +360,8 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
         }
       }
       
-      const newPlayerId = (players.length > 0 || cashedOutPlayers.length > 0) 
-        ? Math.max(...players.map((p) => p.id), ...cashedOutPlayers.map((p) => p.id)) + 1 
-        : 1;
-
       const newPlayer: Player = {
-        id: newPlayerId,
+        id: playerId!,
         name: playerName!,
         transactions: [
           {
@@ -383,7 +380,10 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       if (positionsSet) {
         newPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
       }
-      updateGame({ players: newPlayers });
+      updateGame({ 
+        players: newPlayers,
+        requests: requests.filter(r => r.userId !== playerId)
+      });
       toast({ title: 'Jogador Adicionado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
       setNewPlayerName('');
       setNewPlayerBuyIn('');
@@ -412,7 +412,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     setTransactionDetails(null);
   };
 
-  const removePlayer = (id: number) => {
+  const removePlayer = (id: string) => {
     updateGame({
       players: players.filter((p) => p.id !== id),
     });
@@ -511,7 +511,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     return activePlayersBuyIn + cashedOutPlayersBuyIn;
   }, [players, cashedOutPlayers]);
 
-  const handlePlayerChipCountChange = (playerId: number, chipId: number, count: number) => {
+  const handlePlayerChipCountChange = (playerId: string, chipId: number, count: number) => {
     const updatedPlayers = players.map((p) => {
       if (p.id === playerId) {
         const newCounts = new Map(Object.entries(p.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
@@ -1155,7 +1155,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                 updateGame({ chips: updatedChips });
                                 }}
                                 className="w-24 flex-1"
-                                disabled={!isAdmin}
                             />
                             <div className="flex items-center">
                                 <span className="mr-2 text-sm">R$</span>
@@ -1171,13 +1170,11 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                     updateGame({ chips: updatedChips });
                                 }}
                                 className="w-20"
-                                disabled={!isAdmin}
                                 />
                             </div>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
                                 onClick={() => handleRemoveChip(chip.id)}
                             >
                                 <Trash2 className="h-4 w-4 text-red-500/80" />

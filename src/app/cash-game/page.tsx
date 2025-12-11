@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, LogIn, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
+import type { JoinRequest } from '@/lib/types';
+
 
 // Helper to generate a random ID
 const generateId = () => {
@@ -60,6 +62,7 @@ export default function CashGameLandingPage() {
         chips: initialChips,
         players: [],
         cashedOutPlayers: [],
+        requests: [],
         positionsSet: false,
         dealerId: null,
         createdAt: new Date().toISOString(),
@@ -81,21 +84,60 @@ export default function CashGameLandingPage() {
       toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, insira o ID da sala.' });
       return;
     }
+    if (!user) {
+       toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para entrar em uma sala.' });
+       return;
+    }
     setIsJoining(true);
+    const gameId = joinGameId.toUpperCase();
 
     try {
-        const gameRef = doc(firestore, 'cashGames', joinGameId.toUpperCase());
+        const gameRef = doc(firestore, 'cashGames', gameId);
         const docSnap = await getDoc(gameRef);
 
         if (docSnap.exists()) {
-            router.push(`/cash-game/${joinGameId.toUpperCase()}`);
+            if(isAdmin) {
+                 router.push(`/cash-game/${gameId}`);
+                 return;
+            }
+
+            const gameData = docSnap.data();
+            const alreadyPlayer = gameData.players.some((p: any) => p.id === user.uid);
+            const alreadyRequested = gameData.requests.some((r: any) => r.userId === user.uid);
+
+            if (alreadyPlayer) {
+                toast({ title: 'Você já está na mesa', description: 'Redirecionando para a sala...' });
+                router.push(`/cash-game/${gameId}`);
+                return;
+            }
+
+            if (alreadyRequested) {
+                 toast({ variant: 'destructive', title: 'Solicitação Pendente', description: 'Você já pediu para entrar. Aguarde a aprovação do admin.' });
+                 setIsJoining(false);
+                 return;
+            }
+            
+            const newRequest: JoinRequest = {
+                userId: user.uid,
+                userName: user.nickname,
+                status: 'pending',
+                requestedAt: new Date().toISOString()
+            };
+
+            await updateDoc(gameRef, {
+                requests: arrayUnion(newRequest)
+            });
+
+            toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado ao admin.' });
+            router.push(`/cash-game/${gameId}`);
+
         } else {
             toast({ variant: 'destructive', title: 'Sala não encontrada', description: 'Nenhuma sala encontrada com este ID. Verifique o código e tente novamente.' });
-            setIsJoining(false);
         }
     } catch (error) {
         console.error("Error joining game: ", error);
         toast({ variant: 'destructive', title: 'Erro ao Entrar na Sala', description: 'Ocorreu um erro. Tente novamente.' });
+    } finally {
         setIsJoining(false);
     }
   };
@@ -150,7 +192,7 @@ export default function CashGameLandingPage() {
           </CardContent>
           <CardFooter>
             <Button variant="secondary" className="w-full" onClick={handleJoinGame} disabled={isJoining}>
-              {isJoining ? 'Entrando...' : 'Entrar na Sala'}
+              {isJoining ? 'Enviando Pedido...' : 'Entrar na Sala'}
             </Button>
           </CardFooter>
         </Card>

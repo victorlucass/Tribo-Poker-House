@@ -48,7 +48,7 @@ export default function SignupPage() {
         name,
         nickname,
         email,
-        role: email.toLowerCase() === 'victorlucas.ao@gmail.com' ? 'admin' : 'player',
+        role: email.toLowerCase() === 'victorlucas.ao@gmail.com' ? 'root' : 'player',
       };
 
       await setDoc(doc(firestore, 'users', firebaseUser.uid), userProfile);

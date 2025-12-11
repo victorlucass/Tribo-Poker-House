@@ -37,7 +37,7 @@ export interface CashGameChip {
 }
 
 export interface CashGamePlayer {
-    id: number;
+    id: string; // Firebase UID
     name: string;
     transactions: PlayerTransaction[];
     finalChipCounts: Record<string, number>;
@@ -54,7 +54,7 @@ export interface PlayerTransaction {
 
 
 export interface CashedOutPlayer {
-  id: number;
+  id: string;
   name: string;
   transactions: PlayerTransaction[];
   cashedOutAt: string; // Store as ISO string
@@ -63,14 +63,22 @@ export interface CashedOutPlayer {
   totalInvested: number;
 }
 
+export interface JoinRequest {
+    userId: string;
+    userName: string;
+    status: 'pending';
+    requestedAt: string;
+}
+
 export interface CashGame {
     id: string;
     name: string;
     chips: CashGameChip[];
     players: CashGamePlayer[];
     cashedOutPlayers: CashedOutPlayer[];
+    requests: JoinRequest[];
     positionsSet: boolean;
-    dealerId: number | null;
+    dealerId: string | null;
     createdAt: string; // Store as ISO string
     ownerId: string;
 }
@@ -80,5 +88,5 @@ export interface UserProfile {
   name: string;
   nickname: string;
   email: string;
-  role: 'admin' | 'player';
+  role: 'root' | 'admin' | 'player';
 }
