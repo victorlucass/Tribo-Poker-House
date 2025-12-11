@@ -134,16 +134,16 @@ export default function MySituationPage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 {sortedChips.map((chip) => (
-                  <div key={chip.id} className="grid grid-cols-3 items-center gap-4">
-                    <Label htmlFor={`my-chip-${chip.id}`} className="text-right flex items-center justify-end gap-2 text-sm">
+                  <div key={chip.id} className="grid grid-cols-[auto_1fr] items-center gap-4">
+                    <Label htmlFor={`my-chip-${chip.id}`} className="flex items-center justify-end gap-2 text-sm">
                       <ChipIcon color={chip.color} />
-                      <span className="truncate">Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                      <span className="whitespace-nowrap">Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                     </Label>
                     <Input
                       id={`my-chip-${chip.id}`}
                       type="number"
                       inputMode="decimal"
-                      className="col-span-2 font-mono text-center"
+                      className="font-mono text-center"
                       min="0"
                       placeholder="Quantidade"
                       value={myChipCounts.get(chip.id) || ''}
