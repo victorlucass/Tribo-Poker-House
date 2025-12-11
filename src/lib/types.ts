@@ -72,6 +72,7 @@ export interface JoinRequest {
 
 export interface CashGame {
     id: string;
+    ownerId: string; // ID of the user who created the game
     name: string;
     chips: CashGameChip[];
     players: CashGamePlayer[];
@@ -80,7 +81,6 @@ export interface CashGame {
     positionsSet: boolean;
     dealerId: string | null;
     createdAt: string; // Store as ISO string
-    ownerId: string;
 }
 
 export interface UserProfile {
@@ -88,5 +88,5 @@ export interface UserProfile {
   name: string;
   nickname: string;
   email: string;
-  role: 'root' | 'admin' | 'player';
+  role: 'admin' | 'player';
 }

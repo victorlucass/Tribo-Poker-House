@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,7 +75,7 @@ export default function CashGameLandingPage() {
       router.push(`/cash-game/${gameId}`);
     } catch (error) {
       console.error('Error creating game: ', error);
-      toast({ variant: 'destructive', title: 'Erro ao Criar Sala', description: 'Não foi possível criar a sala. Tente novamente.' });
+      toast({ variant: 'destructive', title: 'Erro ao Criar Sala', description: 'Não foi possível criar a sala. Verifique as regras de segurança e tente novamente.' });
     } finally {
       setIsCreating(false);
     }
@@ -98,12 +98,14 @@ export default function CashGameLandingPage() {
       const docSnap = await getDoc(gameRef);
 
       if (docSnap.exists()) {
-        if (isAdmin) {
+        const gameData = docSnap.data();
+        
+        // Admin or game owner can join directly
+        if (isAdmin || gameData.ownerId === user.uid) {
           router.push(`/cash-game/${gameId}`);
           return;
         }
 
-        const gameData = docSnap.data();
         const alreadyPlayer = gameData.players.some((p: any) => p.id === user.uid);
         const alreadyCashedOut = gameData.cashedOutPlayers.some((p: any) => p.id === user.uid);
         const alreadyRequested = gameData.requests.some((r: any) => r.userId === user.uid);
@@ -115,7 +117,7 @@ export default function CashGameLandingPage() {
         }
 
         if (alreadyRequested) {
-          toast({ variant: 'destructive', title: 'Solicitação Pendente', description: 'Você já pediu para entrar. Aguarde a aprovação do admin.' });
+          toast({ variant: 'destructive', title: 'Solicitação Pendente', description: 'Você já pediu para entrar. Aguarde a aprovação.' });
           setIsJoining(false);
           return;
         }
@@ -131,7 +133,7 @@ export default function CashGameLandingPage() {
           requests: arrayUnion(newRequest),
         });
 
-        toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado ao admin.' });
+        toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado.' });
         setJoinGameId('');
       } else {
         toast({ variant: 'destructive', title: 'Sala não encontrada', description: 'Nenhuma sala encontrada com este ID. Verifique o código e tente novamente.' });
@@ -160,24 +162,22 @@ export default function CashGameLandingPage() {
         </Button>
       </div>
       <div className="w-full max-w-md space-y-8">
-        {isAdmin && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-accent">
-                <PlusCircle /> Criar Nova Sala
-              </CardTitle>
-              <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Input placeholder="Nome da Sala (Ex: Jogo de Terça)" value={newGameName} onChange={(e) => setNewGameName(e.target.value)} disabled={isCreating} />
-            </CardContent>
-            <CardFooter>
-              <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
-                {isCreating ? 'Criando...' : 'Criar Sala'}
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-accent">
+              <PlusCircle /> Criar Nova Sala
+            </CardTitle>
+            <CardDescription>Crie uma nova sala de Cash Game para você e seus amigos.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Input placeholder="Nome da Sala (Ex: Jogo de Terça)" value={newGameName} onChange={(e) => setNewGameName(e.target.value)} disabled={isCreating} />
+          </CardContent>
+          <CardFooter>
+            <Button className="w-full" onClick={handleCreateGame} disabled={isCreating}>
+              {isCreating ? 'Criando...' : 'Criar Sala'}
+            </Button>
+          </CardFooter>
+        </Card>
 
         <Card>
           <CardHeader>
