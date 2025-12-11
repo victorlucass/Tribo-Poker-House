@@ -59,6 +59,7 @@ import {
   Hourglass,
   ThumbsDown,
   LogIn,
+  Wallet,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -216,10 +217,12 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const positionsSet = game?.positionsSet ?? false;
   const requests = game?.requests ?? [];
 
-  const currentUserIsPlayer = useMemo(() => {
-    if (!user || !game) return false;
-    return game.players.some(p => p.id === user.uid);
+  const currentUserPlayerInfo = useMemo(() => {
+    if (!user || !game) return null;
+    return game.players.find(p => p.id === user.uid) || null;
   }, [user, game]);
+
+  const currentUserIsPlayer = !!currentUserPlayerInfo;
 
   const currentUserStatus = useMemo(() => {
     if (currentUserIsPlayer) return 'player';
@@ -266,6 +269,11 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const [adminBuyIn, setAdminBuyIn] = useState('');
 
   const [isClient, setIsClient] = useState(false);
+
+  // States for "My Situation" dialog
+  const [isMySituationOpen, setIsMySituationOpen] = useState(false);
+  const [myChipCounts, setMyChipCounts] = useState<Map<number, number>>(new Map());
+
 
   useEffect(() => {
     setIsClient(true);
@@ -747,6 +755,26 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const isUserGameOwner = useMemo(() => game?.ownerId === user?.uid, [game, user]);
   const canManageGame = isAdmin || isUserGameOwner;
 
+  const handleMyChipCountChange = (chipId: number, count: number) => {
+    setMyChipCounts(prev => new Map(prev).set(chipId, count));
+  };
+
+  const myCurrentChipsValue = useMemo(() => {
+    return Array.from(myChipCounts.entries()).reduce((acc, [chipId, count]) => {
+      const chip = sortedChips.find(c => c.id === chipId);
+      return acc + (chip ? chip.value * count : 0);
+    }, 0);
+  }, [myChipCounts, sortedChips]);
+  
+  const myTotalInvested = useMemo(() => {
+    if (!currentUserPlayerInfo) return 0;
+    return currentUserPlayerInfo.transactions.reduce((acc, t) => acc + t.amount, 0);
+  }, [currentUserPlayerInfo]);
+  
+  const myBalance = useMemo(() => {
+    return myCurrentChipsValue - myTotalInvested;
+  }, [myCurrentChipsValue, myTotalInvested]);
+
   if (status === 'loading' || isAuthLoading || !firestore) {
     return (
       <div className="min-h-screen w-full bg-background p-4 md:p-8">
@@ -821,10 +849,87 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               </div>
             </div>
           </div>
-          <Button variant="outline" onClick={handleLogout} size="sm" className="shrink-0">
-            <LogOut className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Sair</span>
-          </Button>
+          <div className="flex items-center gap-2">
+             {currentUserIsPlayer && (
+              <Dialog open={isMySituationOpen} onOpenChange={setIsMySituationOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="secondary">
+                    <Wallet className="mr-2 h-4 w-4" />
+                    Minha Situação
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>Minha Situação na Mesa</DialogTitle>
+                    <DialogDescription>
+                      Calcule seu balanço atual inserindo a quantidade de fichas que você tem.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4 space-y-6">
+                    <div>
+                      <h3 className="font-semibold mb-2">Meu Investimento</h3>
+                      <div className="space-y-1 text-sm">
+                        {currentUserPlayerInfo?.transactions.map(t => (
+                           <div key={t.id} className="flex justify-between items-center">
+                              <span className="capitalize text-muted-foreground">{t.type} #{t.id}</span>
+                              <span className="font-mono">{t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                           </div>
+                        ))}
+                         <Separator className="!my-2" />
+                         <div className="flex justify-between items-center font-bold">
+                            <span>Total Investido</span>
+                            <span className="font-mono">{myTotalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                         </div>
+                      </div>
+                    </div>
+                     <div>
+                      <h3 className="font-semibold mb-2">Minhas Fichas Atuais</h3>
+                       <div className="space-y-2">
+                        {sortedChips.map((chip) => (
+                          <div key={chip.id} className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor={`my-chip-${chip.id}`} className="text-right flex items-center justify-end gap-2 text-sm">
+                              <ChipIcon color={chip.color} />
+                              Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </Label>
+                            <Input
+                              id={`my-chip-${chip.id}`}
+                              type="number"
+                              inputMode="decimal"
+                              className="col-span-2"
+                              min="0"
+                              placeholder="Quantidade"
+                              value={myChipCounts.get(chip.id) || ''}
+                              onChange={(e) => handleMyChipCountChange(chip.id, parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                     <Separator className="!my-4" />
+                     <div className="space-y-2 text-lg">
+                        <div className="flex justify-between items-center font-bold">
+                           <Label>Valor Atual em Fichas:</Label>
+                           <span className="font-mono text-primary">{myCurrentChipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                        <div className="flex justify-between items-center font-bold">
+                           <Label>Balanço (Lucro/Prejuízo):</Label>
+                           <span className={cn('font-mono', myBalance >= 0 ? 'text-green-400' : 'text-red-400')}>
+                            {myBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                     </div>
+                  </div>
+                   <DialogFooter>
+                      <Button onClick={() => setIsMySituationOpen(false)}>Fechar</Button>
+                   </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+            <Button variant="outline" onClick={handleLogout} size="sm" className="shrink-0">
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Sair</span>
+            </Button>
+          </div>
         </header>
 
         {currentUserStatus === 'pending' && (
@@ -1915,3 +2020,5 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 };
 
 export default CashGameManager;
+
+    
