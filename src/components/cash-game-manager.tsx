@@ -706,12 +706,54 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
       {isDealing && <CardDealAnimation players={playersForAnimation} onComplete={onDealingComplete} />}
       <div className="mx-auto w-full max-w-7xl">
-        <header className="mb-4 flex items-center justify-between">
-            <Button asChild variant="outline" size="icon">
-              <Link href="/cash-game">
-                <ArrowLeft />
-              </Link>
-            </Button>
+        {/* Mobile Header */}
+        <header className="mb-4 flex flex-col gap-4 md:hidden">
+            <div className="flex w-full items-center justify-between">
+                <Button asChild variant="outline" size="icon">
+                  <Link href="/cash-game">
+                    <ArrowLeft />
+                  </Link>
+                </Button>
+                {isAdmin && (
+                    <Button variant="outline" onClick={logout}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sair do Modo Admin
+                    </Button>
+                )}
+            </div>
+            <div className="flex flex-col items-start gap-1">
+                <h1 className="font-headline text-3xl font-bold text-accent">
+                  {game?.name}
+                </h1>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
+                      <Copy className="h-4 w-4"/>
+                  </Button>
+                </div>
+            </div>
+        </header>
+
+        {/* Desktop Header */}
+        <header className="mb-8 hidden items-center justify-between md:flex">
+            <div className='flex items-center gap-4'>
+                <Button asChild variant="outline" size="icon">
+                  <Link href="/cash-game">
+                    <ArrowLeft />
+                  </Link>
+                </Button>
+                <div className="flex flex-col items-start gap-1">
+                    <h1 className="font-headline text-3xl font-bold text-accent md:text-4xl">
+                      {game?.name}
+                    </h1>
+                    <div className="flex items-center gap-2">
+                      <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
+                          <Copy className="h-4 w-4"/>
+                      </Button>
+                    </div>
+                </div>
+            </div>
             {isAdmin && (
                 <Button variant="outline" onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
@@ -720,21 +762,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
             )}
         </header>
 
-        <div className="mb-8 flex flex-col items-start gap-1">
-            <h1 className="font-headline text-3xl font-bold text-accent md:text-4xl">
-              {game?.name}
-            </h1>
-            <div className="flex items-center gap-2">
-              <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
-                  <Copy className="h-4 w-4"/>
-              </Button>
-            </div>
-        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <Card className="bg-secondary lg:hidden">
+            <Card className="lg:hidden">
               <CardHeader>
                 <CardTitle className="text-secondary-foreground">Banca Ativa</CardTitle>
                 <CardDescription className="text-secondary-foreground/80">
@@ -748,7 +778,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               </CardContent>
             </Card>
 
-            <main className="space-y-8">
+          <main className="lg:col-span-2 space-y-8">
               {isAdmin && (
                   <Card>
                   <CardHeader>
@@ -1076,7 +1106,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 </Card>
               )}
             </main>
-          </div>
           
 
           <aside className="space-y-8 lg:col-start-3">
