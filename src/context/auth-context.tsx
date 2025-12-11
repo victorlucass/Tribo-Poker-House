@@ -35,9 +35,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This effect handles fetching the user profile from Firestore
-    // once we have a firebase user and a firestore instance.
-    const fetchUserProfile = async () => {
+    // This effect now controls the entire auth flow, from start to finish.
+    const manageAuthFlow = async () => {
+      // 1. Wait for Firebase Auth to determine if a user is logged in.
+      if (isUserLoading) {
+        return; // Still waiting for Firebase...
+      }
+
+      // 2. If there's a Firebase user, try to fetch their profile from Firestore.
       if (firebaseUser && firestore) {
         const userDocRef = doc(firestore, 'users', firebaseUser.uid);
         try {
@@ -46,38 +51,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUserProfile(docSnap.data() as UserProfile);
           } else {
             console.warn("User exists in Auth, but not in Firestore.", firebaseUser.uid);
-            setUserProfile(null); // Explicitly set to null if no profile
+            setUserProfile(null);
           }
         } catch (error) {
           console.error("Error fetching user profile:", error);
           setUserProfile(null);
+        } finally {
+          // Finish loading only after Firestore lookup is complete.
+          setLoading(false);
         }
       } else {
-        setUserProfile(null); // No firebase user, so no profile
+        // 3. If there's no Firebase user, there's no profile to fetch. Finish loading.
+        setUserProfile(null);
+        setLoading(false);
       }
     };
-    
-    fetchUserProfile();
-  }, [firebaseUser, firestore]);
+
+    manageAuthFlow();
+  }, [firebaseUser, isUserLoading, firestore]);
 
   useEffect(() => {
-    // This effect manages the overall loading state.
-    // The authentication process is considered "loading" until
-    // Firebase Auth is initialized AND we have tried to fetch the user profile.
-    if (isUserLoading) {
-      setLoading(true);
-    } else {
-      setLoading(false);
+    // This effect handles redirection and should only run AFTER the loading is complete.
+    if (loading) {
+      return; // Do not redirect while still loading.
     }
-  }, [isUserLoading, userProfile]);
 
-  useEffect(() => {
-    // This effect handles redirection for protected routes.
     const publicPaths = ['/login', '/signup', '/facial-login'];
     const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
 
     // If loading is finished, there's no user, and we are on a protected path...
-    if (!loading && !userProfile && !isPublicPath) {
+    if (!userProfile && !isPublicPath) {
       // ...redirect to login.
       router.push('/login');
     }
@@ -85,26 +88,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
-
   const publicPaths = ['/login', '/signup', '/facial-login'];
   const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
 
-  // If we are on a protected path and still loading, show a full screen loader.
+  // While loading, if we are on a protected path, show a full screen loader.
   if (loading && !isPublicPath) {
     return <FullScreenLoader />;
   }
-
-  // If we are on a public path, or if we are done loading and have a user, show the children.
+  
+  // If we are on a public path (like login), show it.
+  // Or, if loading is done AND we have a user, show the protected content.
   if (isPublicPath || (!loading && userProfile)) {
-    return (
-      <AuthContext.Provider value={{ user: userProfile, loading, isAdmin }}>
-        {children}
-      </AuthContext.Provider>
-    );
+      return (
+          <AuthContext.Provider value={{ user: userProfile, loading, isAdmin }}>
+              {children}
+          </AuthContext.Provider>
+      );
   }
 
-  // If we are on a protected path, done loading, but have no user,
-  // the redirect effect will handle it. Show a loader in the meantime.
+  // This final case handles the moment on a protected path right after loading finishes
+  // but before the redirection useEffect kicks in. It shows the loader to prevent a flicker.
   return <FullScreenLoader />;
 };
 
