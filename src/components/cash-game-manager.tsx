@@ -706,7 +706,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       {isDealing && <CardDealAnimation players={playersForAnimation} onComplete={onDealingComplete} />}
       <div className="mx-auto w-full max-w-7xl">
         {/* Mobile Header */}
-        <header className="mb-4 flex flex-col gap-4 md:hidden">
+        <div className="mb-4 flex flex-col gap-4 md:hidden">
             <div className="flex w-full items-center justify-between">
                 <Button asChild variant="outline" size="icon">
                   <Link href="/cash-game">
@@ -731,10 +731,10 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                   </Button>
                 </div>
             </div>
-        </header>
+        </div>
 
         {/* Desktop Header */}
-        <header className="mb-8 hidden items-center justify-between md:flex">
+        <header className="mb-8 hidden md:flex items-center justify-between">
             <div className='flex items-center gap-4'>
                 <Button asChild variant="outline" size="icon">
                   <Link href="/cash-game">
@@ -1181,7 +1181,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                             <Button
                             variant="outline"
                             className="w-full"
-                            disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
+                            disabled={!isAdmin}
                             >
                             Adicionar Ficha
                             </Button>
