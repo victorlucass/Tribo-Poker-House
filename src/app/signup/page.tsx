@@ -4,14 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { UserPlus } from 'lucide-react';
 import Link from 'next/link';
-import type { UserProfile } from '@/lib/types';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -39,7 +38,6 @@ export default function SignupPage() {
       return;
     }
 
-
     try {
       // Check if nickname already exists
       const nicknameQuery = query(collection(firestore, "users"), where("nickname", "==", nickname));
@@ -50,22 +48,12 @@ export default function SignupPage() {
         return;
       }
 
-      // Step 1: Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const firebaseUser = userCredential.user;
+      // Step 1: Create user in Firebase Auth.
+      // The user profile document will be created by a Cloud Function triggered by this event.
+      await createUserWithEmailAndPassword(auth, email, password);
 
-      // Step 2: Create user profile in Firestore
-      const userProfile: UserProfile = {
-        uid: firebaseUser.uid,
-        name,
-        nickname,
-        email,
-        role: email.toLowerCase() === 'victorlucas.ao@gmail.com' ? 'root' : 'player',
-      };
-
-      await setDoc(doc(firestore, 'users', firebaseUser.uid), userProfile);
-
-      toast({ title: 'Cadastro realizado com sucesso!', description: 'Você já pode fazer login.' });
+      // The onAuthStateChanged listener in AuthProvider will handle the redirect.
+      toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });
       router.push('/login');
 
     } catch (error: any) {

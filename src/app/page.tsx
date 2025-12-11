@@ -9,12 +9,20 @@ import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { useEffect } from 'react';
 
 export default function Home() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const auth = getAuth();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
 
   const handleLogout = () => {
     signOut(auth).then(() => {
@@ -23,8 +31,7 @@ export default function Home() {
     });
   };
 
-  // Mostra o skeleton enquanto o AuthProvider está trabalhando
-  if (loading) {
+  if (loading || !user) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-8">
         <div className="text-center mb-12">
@@ -35,7 +42,6 @@ export default function Home() {
     );
   }
 
-  // Se o usuário estiver logado, mostra o conteúdo principal
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="absolute top-8 right-8">
