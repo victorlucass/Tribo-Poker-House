@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { useFirebase } from '../provider';
 
 /** Utility type to add an 'id' field to a given type T. */
 type WithId<T> = T & { id: string };
@@ -20,7 +21,7 @@ type WithId<T> = T & { id: string };
  */
 export interface UseDocResult<T> {
   data: WithId<T> | null; // Document data with ID, or null.
-  isLoading: boolean;       // True if loading.
+  status: 'loading' | 'success' | 'error';
   error: FirestoreError | Error | null; // Error object, or null.
 }
 
@@ -36,26 +37,27 @@ export interface UseDocResult<T> {
  * @template T Optional type for document data. Defaults to any.
  * @param {DocumentReference<DocumentData> | null | undefined} docRef -
  * The Firestore DocumentReference. Waits if null/undefined.
- * @returns {UseDocResult<T>} Object with data, isLoading, error.
+ * @returns {UseDocResult<T>} Object with data, status, error.
  */
 export function useDoc<T = any>(
-  memoizedDocRef: DocumentReference<DocumentData> | null | undefined,
+  memoizedDocRef: (DocumentReference<DocumentData> & {__memo?: boolean}) | null | undefined,
 ): UseDocResult<T> {
+  const { firestore } = useFirebase();
   type StateDataType = WithId<T> | null;
 
   const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
-    if (!memoizedDocRef) {
+    if (!firestore || !memoizedDocRef) {
       setData(null);
-      setIsLoading(false);
+      setStatus(memoizedDocRef === null ? 'success' : 'loading');
       setError(null);
-      return;
+      return () => {};
     }
 
-    setIsLoading(true);
+    setStatus('loading');
     setError(null);
     // Optional: setData(null); // Clear previous data instantly
 
@@ -69,7 +71,7 @@ export function useDoc<T = any>(
           setData(null);
         }
         setError(null); // Clear any previous error on successful snapshot (even if doc doesn't exist)
-        setIsLoading(false);
+        setStatus('success');
       },
       (error: FirestoreError) => {
         const contextualError = new FirestorePermissionError({
@@ -79,7 +81,7 @@ export function useDoc<T = any>(
 
         setError(contextualError)
         setData(null)
-        setIsLoading(false)
+        setStatus('error');
 
         // trigger global error propagation
         errorEmitter.emit('permission-error', contextualError);
@@ -87,7 +89,11 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef]); // Re-run if the memoizedDocRef changes.
+  }, [firestore, memoizedDocRef]); // Re-run if the memoizedDocRef changes.
 
-  return { data, isLoading, error };
+  if(memoizedDocRef && !memoizedDocRef.__memo) {
+    throw new Error('DocumentReference ' + memoizedDocRef + ' was not properly memoized using useMemoFirebase');
+  }
+
+  return { data, status, error };
 }

@@ -1,45 +1,65 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useUser as useFirebaseUser, useFirestore as useFirebaseFirestore } from '@/firebase';
+import type { UserProfile } from '@/lib/types';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
+  user: UserProfile | null;
+  loading: boolean;
   isAdmin: boolean;
-  login: (user: string, pass: string) => boolean;
-  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ADMIN_USER = 'victorlucas.ao';
-const ADMIN_PASS = 'flamengo-tetra';
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAdmin, setIsAdmin] = useState(false);
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { user: firebaseUser, isUserLoading: isFirebaseUserLoading } = useFirebaseUser();
+  const firestore = useFirebaseFirestore();
+  
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check localStorage on component mount to see if user was already logged in
-    const storedIsAdmin = localStorage.getItem('isAdmin');
-    if (storedIsAdmin === 'true') {
-      setIsAdmin(true);
+    // Overall loading state depends on Firebase Auth and Firestore fetch
+    if (isFirebaseUserLoading) {
+      setLoading(true);
+      return;
     }
-  }, []);
 
-  const login = (user: string, pass: string): boolean => {
-    if (user === ADMIN_USER && pass === ADMIN_PASS) {
-      localStorage.setItem('isAdmin', 'true');
-      setIsAdmin(true);
-      return true;
+    if (!firebaseUser) {
+      setUserProfile(null);
+      setLoading(false);
+      return;
     }
-    return false;
-  };
 
-  const logout = () => {
-    localStorage.removeItem('isAdmin');
-    setIsAdmin(false);
-  };
+    const fetchUserProfile = async () => {
+      if (!firestore) {
+        setLoading(false);
+        return;
+      }
+      const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+      const docSnap = await getDoc(userDocRef);
+
+      if (docSnap.exists()) {
+        setUserProfile(docSnap.data() as UserProfile);
+      } else {
+        // This case might happen if a user exists in Auth but not in Firestore.
+        // You might want to handle this, e.g., by logging them out or creating a profile.
+        console.warn("User exists in Auth, but not in Firestore.", firebaseUser.uid);
+        setUserProfile(null);
+      }
+      setLoading(false);
+    };
+
+    fetchUserProfile();
+
+  }, [firebaseUser, isFirebaseUserLoading, firestore]);
+
+  const isAdmin = userProfile?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ isAdmin, login, logout }}>
+    <AuthContext.Provider value={{ user: userProfile, loading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

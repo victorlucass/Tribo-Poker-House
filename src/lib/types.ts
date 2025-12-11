@@ -72,4 +72,13 @@ export interface CashGame {
     positionsSet: boolean;
     dealerId: number | null;
     createdAt: string; // Store as ISO string
+    ownerId: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  name: string;
+  nickname: string;
+  email: string;
+  role: 'admin' | 'player';
 }

@@ -1,9 +1,41 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Zap, Users } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Apenas redireciona se o carregamento estiver concluído E não houver usuário
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+
+  // Mostra o skeleton enquanto o Firebase Auth está inicializando
+  if (loading || !user) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-8">
+        <div className="text-center mb-12">
+            <h1 className="font-headline text-5xl font-bold text-accent">
+                Tribo Poker House
+            </h1>
+        </div>
+        <Skeleton className="h-64 w-full max-w-4xl" />
+      </main>
+    )
+  }
+
+  // Se o usuário estiver logado, mostra o conteúdo principal
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="text-center mb-12">

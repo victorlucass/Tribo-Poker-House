@@ -174,105 +174,77 @@
         "place",
         "percentage"
       ]
+    },
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user profile.",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's unique ID from Firebase Auth."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "nickname": {
+          "type": "string",
+          "description": "The user's nickname or username."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "player"],
+          "description": "The user's role in the application."
+        }
+      },
+      "required": ["uid", "name", "nickname", "email", "role"]
     }
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "password"
     ]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/tournaments/{tournamentId}",
+        "path": "/users/{userId}",
         "definition": {
-          "entityName": "Tournament",
+          "entityName": "UserProfile",
           "schema": {
-            "$ref": "#/backend/entities/Tournament"
+            "$ref": "#/backend/entities/UserProfile"
           },
-          "description": "Stores tournament information. Includes denormalized `ownerId` for authorization independence (if needed).",
+          "description": "Stores user profile information, including their role.",
           "params": [
             {
-              "name": "tournamentId",
-              "description": "Unique identifier for the tournament."
+              "name": "userId",
+              "description": "Unique identifier for the user, matching their Firebase Auth UID."
             }
           ]
         }
       },
       {
-        "path": "/blindStructures/{blindStructureId}",
+        "path": "/cashGames/{gameId}",
         "definition": {
-          "entityName": "BlindStructure",
+          "entityName": "CashGame",
           "schema": {
-            "$ref": "#/backend/entities/BlindStructure"
+            "$ref": "#/backend/entities/CashGame"
           },
-          "description": "Stores blind structure definitions.",
+          "description": "Stores all data related to a specific cash game session.",
           "params": [
             {
-              "name": "blindStructureId",
-              "description": "Unique identifier for the blind structure."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/blindStructures/{blindStructureId}/blindLevels/{blindLevelId}",
-        "definition": {
-          "entityName": "BlindLevel",
-          "schema": {
-            "$ref": "#/backend/entities/BlindLevel"
-          },
-          "description": "Stores individual blind levels associated with a blind structure.",
-          "params": [
-            {
-              "name": "blindStructureId",
-              "description": "Unique identifier for the blind structure."
-            },
-            {
-              "name": "blindLevelId",
-              "description": "Unique identifier for the blind level."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/payoutStructures/{payoutStructureId}",
-        "definition": {
-          "entityName": "PayoutStructure",
-          "schema": {
-            "$ref": "#/backend/entities/PayoutStructure"
-          },
-          "description": "Stores payout structure definitions.",
-          "params": [
-            {
-              "name": "payoutStructureId",
-              "description": "Unique identifier for the payout structure."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/payoutStructures/{payoutStructureId}/payoutEntries/{payoutEntryId}",
-        "definition": {
-          "entityName": "PayoutEntry",
-          "schema": {
-            "$ref": "#/backend/entities/PayoutEntry"
-          },
-          "description": "Stores individual payout entries associated with a payout structure.",
-          "params": [
-            {
-              "name": "payoutStructureId",
-              "description": "Unique identifier for the payout structure."
-            },
-            {
-              "name": "payoutEntryId",
-              "description": "Unique identifier for the payout entry."
+              "name": "gameId",
+              "description": "Unique identifier for the cash game."
             }
           ]
         }
       }
-    ],
-    "reasoning": "The Firestore data structure is designed to manage poker tournaments, blind structures, payout structures, and related data efficiently. The structure is optimized for querying and managing tournaments and their associated configurations.  Each collection is designed for homogeneous security, ensuring that rules can be applied consistently across all documents within a collection.\n\n**Authorization Independence:**\n\n*   No explicit authorization is required at this level. The app assumes an administrative role that manages all the data. We can introduce an `ownerId` field to Tournament to limit to specific user.\n\n**QAPs Support:**\n\n*   The design segregates data into different collections based on entity type, ensuring that queries can be efficiently performed against each entity without mixing data with different access requirements."
+    ]
   }
 }

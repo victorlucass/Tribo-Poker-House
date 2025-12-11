@@ -4,25 +4,35 @@ import * as React from "react";
 import type { User } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 
-import { useAuth } from "../provider";
+import { useAuth as useFirebaseAuth } from "../provider";
 
-export function useUser() {
-  const auth = useAuth();
+export interface UseUserResult {
+  user: User | null;
+  isUserLoading: boolean;
+  userError: Error | null;
+}
+
+export function useUser(): UseUserResult {
+  const auth = useFirebaseAuth();
   const [user, setUser] = React.useState<User | null>(null);
-  const [status, setStatus] = React.useState<"idle" | "loading" | "success" | "error">("idle");
-  const [error, setError] = React.useState<Error | null>(null);
+  const [isUserLoading, setIsUserLoading] = React.useState<boolean>(true);
+  const [userError, setUserError] = React.useState<Error | null>(null);
 
   React.useEffect(() => {
-    setStatus("loading");
+    if (!auth) {
+      setIsUserLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(
       auth,
       (user) => {
         setUser(user);
-        setStatus("success");
+        setIsUserLoading(false);
       },
       (error) => {
-        setError(error);
-        setStatus("error");
+        setUserError(error);
+        setIsUserLoading(false);
       }
     );
 
@@ -31,5 +41,5 @@ export function useUser() {
     };
   }, [auth]);
 
-  return { user, status, error };
+  return { user, isUserLoading, userError };
 }

@@ -61,13 +61,14 @@ import { Separator } from './ui/separator';
 import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
-import { useDoc, useFirestore } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { useAuth } from '@/context/auth-context';
+import { getAuth, signOut } from 'firebase/auth';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -187,9 +188,17 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { toast } = useToast();
   const firestore = useFirestore();
   const router = useRouter();
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin } = useAuth();
+  const auth = getAuth();
 
-  const gameRef = useMemo(() => {
+  const handleLogout = () => {
+    signOut(auth).then(() => {
+        toast({ title: 'Logout efetuado com sucesso.'})
+        router.push('/login');
+    });
+  }
+
+  const gameRef = useMemoFirebase(() => {
     if (!firestore || !gameId) return null;
     return doc(firestore, 'cashGames', gameId);
   }, [firestore, gameId]);
@@ -714,7 +723,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                   </Link>
                 </Button>
                 {isAdmin && (
-                    <Button variant="outline" onClick={logout}>
+                    <Button variant="outline" onClick={handleLogout}>
                         <LogOut className="mr-2 h-4 w-4" />
                         Sair
                     </Button>
@@ -754,7 +763,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 </div>
             </div>
             {isAdmin && (
-                <Button variant="outline" onClick={logout}>
+                <Button variant="outline" onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Sair do Modo Admin
                 </Button>
@@ -832,8 +841,8 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                       <CardTitle>Jogadores na Mesa</CardTitle>
                       <CardDescription>Distribuição de fichas e ações para cada jogador ativo.</CardDescription>
                     </div>
-                    {!positionsSet && players.length > 1 && (
-                      <Button onClick={handleStartDealing} variant="secondary" disabled={!isAdmin}>
+                    {!positionsSet && players.length > 1 && isAdmin && (
+                      <Button onClick={handleStartDealing} variant="secondary">
                         <Shuffle className="mr-2 h-4 w-4" />
                         Sortear Posições
                       </Button>

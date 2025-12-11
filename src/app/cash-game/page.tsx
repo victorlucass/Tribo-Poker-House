@@ -28,16 +28,25 @@ export default function CashGameLandingPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [newGameName, setNewGameName] = useState('');
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
 
+  if (!user || !firestore) {
+    // Or a loading spinner
+    return null;
+  }
+
   const handleCreateGame = async () => {
     if (!newGameName.trim()) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, dê um nome para a sua sala.' });
       return;
+    }
+    if (!user) {
+       toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para criar uma sala.' });
+       return;
     }
     setIsCreating(true);
 
@@ -54,6 +63,7 @@ export default function CashGameLandingPage() {
         positionsSet: false,
         dealerId: null,
         createdAt: new Date().toISOString(),
+        ownerId: user.uid,
       });
 
       toast({ title: 'Sala Criada!', description: `A sala "${newGameName}" foi criada com sucesso.` });
