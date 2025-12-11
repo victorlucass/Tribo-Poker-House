@@ -25,8 +25,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      // Only root can create other admins. Admins can't create users.
-      allow create: if isOwner(userId) || (isRoot() && request.resource.data.role == 'admin');
+      // Allow user to create their own profile, or a root user to create an admin.
+      allow create: if (request.auth.uid == userId) || (isRoot() && request.resource.data.role == 'admin');
       // Root can edit any user. Admins/players can only edit themselves.
       // An admin cannot edit another user.
       allow update: if isRoot() || isOwner(userId);

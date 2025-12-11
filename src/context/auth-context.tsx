@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This effect manages the entire auth flow sequentially.
+    // This effect handles the entire auth flow sequentially.
     const manageAuthFlow = async () => {
       // 1. Wait for Firebase Auth to determine if a user is logged in.
       if (isUserLoading) {
@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return; // Do not redirect while still loading.
     }
 
-    const publicPaths = ['/login', '/signup', '/facial-login'];
+    const publicPaths = ['/login', '/signup'];
     const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
 
     // If loading is finished, there's no user, and we are on a protected path...
@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [loading, userProfile, pathname, router]);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
-  const publicPaths = ['/login', '/signup', '/facial-login'];
+  const publicPaths = ['/login', '/signup'];
   const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
   
   // While loading, if we are on a protected path, show a full screen loader.
