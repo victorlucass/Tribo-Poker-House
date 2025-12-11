@@ -1,18 +1,16 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Zap, Users, LogOut } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { Skeleton } from '@/components/ui/skeleton';
 import { getAuth, signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const auth = getAuth();
   const { toast } = useToast();
@@ -24,17 +22,6 @@ export default function Home() {
     });
   };
 
-  if (loading || !user) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-8">
-        <div className="text-center mb-12">
-          <h1 className="font-headline text-5xl font-bold text-accent">Tribo Poker House</h1>
-        </div>
-        <Skeleton className="h-64 w-full max-w-4xl" />
-      </main>
-    );
-  }
-
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="absolute top-8 right-8">
@@ -45,7 +32,7 @@ export default function Home() {
       </div>
       <div className="text-center mb-12">
         <h1 className="font-headline text-5xl font-bold text-accent">Tribo Poker House</h1>
-        <p className="text-muted-foreground mt-2 text-lg">Sua ferramenta completa para noites de poker.</p>
+        <p className="text-muted-foreground mt-2 text-lg">Bem-vindo, {user?.name}! Sua ferramenta completa para noites de poker.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
         <Link href="/tournament" passHref>

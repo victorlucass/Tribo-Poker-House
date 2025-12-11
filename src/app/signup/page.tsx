@@ -37,21 +37,23 @@ export default function SignupPage() {
       return;
     }
 
-    const email = `${nickname.toLowerCase()}@tribo.poker`;
+    const email = `${nickname.toLowerCase().trim()}@tribo.poker`;
 
     try {
-      const nicknameQuery = query(collection(firestore, "users"), where("nickname", "==", nickname));
+      // Check if nickname is already taken in Firestore
+      const nicknameQuery = query(collection(firestore, "users"), where("nickname", "==", nickname.trim()));
       const nicknameSnapshot = await getDocs(nicknameQuery);
       if (!nicknameSnapshot.empty) {
         toast({ variant: 'destructive', title: 'Erro de Cadastro', description: 'Este apelido já está em uso. Por favor, escolha outro.' });
         setIsLoading(false);
         return;
       }
-
+      
+      // Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // The user profile document will be created by a Cloud Function trigger.
-      // We just need to update the auth profile here.
+      // The user profile document in Firestore will be created by a Cloud Function trigger.
+      // We just need to update the auth profile display name here.
       await updateProfile(userCredential.user, {
         displayName: name,
       });
@@ -63,9 +65,9 @@ export default function SignupPage() {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';
       if (error.code === 'auth/email-already-in-use') {
-        description = 'Este apelido já está em uso.';
+        description = 'Este apelido já está registrado. Tente fazer login ou use outro apelido.';
       } else if (error.code === 'auth/weak-password') {
-        description = 'A senha é muito fraca. Tente uma mais forte.';
+        description = 'A senha é muito fraca. Tente uma com pelo menos 6 caracteres.';
       }
       toast({ variant: 'destructive', title: 'Falha no Cadastro', description });
     } finally {

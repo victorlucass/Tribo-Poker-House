@@ -3,19 +3,17 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useAuth as useFirebaseAuth } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { KeyRound, LogIn, Smile } from 'lucide-react';
+import { KeyRound, LogIn } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
   const auth = useFirebaseAuth();
-  const firestore = useFirestore();
   const { toast } = useToast();
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
@@ -23,25 +21,23 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     if (!nickname || !password) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, preencha todos os campos.' });
+      toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, preencha o apelido e a senha.' });
       return;
     }
     setIsLoading(true);
 
-    if (!auth || !firestore) {
+    if (!auth) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de autenticação não disponível. Tente novamente em instantes.' });
       setIsLoading(false);
       return;
     }
 
-    // Since we are not using real emails, we construct a fake email from the nickname.
-    // This is required by Firebase Auth for password-based authentication.
-    const emailToLogin = `${nickname.toLowerCase()}@tribo.poker`;
+    const emailToLogin = `${nickname.toLowerCase().trim()}@tribo.poker`;
 
     try {
       await signInWithEmailAndPassword(auth, emailToLogin, password);
       toast({ title: 'Login bem-sucedido!', description: 'Bem-vindo de volta.' });
-      router.push('/cash-game');
+      router.push('/');
     } catch (error: any) {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';

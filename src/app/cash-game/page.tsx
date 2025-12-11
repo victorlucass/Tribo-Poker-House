@@ -13,9 +13,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import type { JoinRequest } from '@/lib/types';
 import { getAuth, signOut } from 'firebase/auth';
-import { Skeleton } from '@/components/ui/skeleton';
 
-// Helper to generate a random ID
 const generateId = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
@@ -31,7 +29,7 @@ export default function CashGameLandingPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { user, isAdmin, loading: isAuthLoading } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [newGameName, setNewGameName] = useState('');
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -78,6 +76,7 @@ export default function CashGameLandingPage() {
     } catch (error) {
       console.error('Error creating game: ', error);
       toast({ variant: 'destructive', title: 'Erro ao Criar Sala', description: 'Não foi possível criar a sala. Tente novamente.' });
+    } finally {
       setIsCreating(false);
     }
   };
@@ -144,17 +143,6 @@ export default function CashGameLandingPage() {
       setIsJoining(false);
     }
   };
-
-  if (isAuthLoading) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-8">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4">

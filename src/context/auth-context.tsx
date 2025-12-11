@@ -20,6 +20,7 @@ const FullScreenLoader = () => (
     <div className="w-full max-w-md space-y-4">
       <Skeleton className="h-24 w-full" />
       <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-16 w-full" />
     </div>
   </div>
 );
@@ -34,63 +35,63 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Keep loading until firebase user state is resolved
+    // Se o hook do Firebase ainda está carregando, não faça nada.
     if (isUserLoading) {
       return;
     }
 
-    const publicPaths = ['/login', '/signup'];
-    const isPublicPath = publicPaths.includes(pathname);
-
-    if (firebaseUser) {
-      if (!firestore) {
-        setLoading(true);
+    const processAuth = async () => {
+      // Se não há usuário do Firebase e não há Firestore, não há nada a fazer.
+      if (!firebaseUser || !firestore) {
+        setUserProfile(null);
+        setLoading(false);
         return;
       }
-      const userDocRef = doc(firestore, 'users', firebaseUser.uid);
-      getDoc(userDocRef)
-        .then((docSnap) => {
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as UserProfile);
-            if (isPublicPath) {
-              router.push('/');
-            } else {
-              setLoading(false);
-            }
-          } else {
-            // Auth record exists, but no user profile in Firestore.
-            setUserProfile(null);
-            if (!isPublicPath) {
-              router.push('/login');
-            } else {
-               setLoading(false);
-            }
-          }
-        })
-        .catch(() => {
-          // Error fetching profile. Treat as logged out.
-          setUserProfile(null);
-          if (!isPublicPath) {
-            router.push('/login');
-          } else {
-            setLoading(false);
-          }
-        });
-    } else {
-      // No firebase user
-      setUserProfile(null);
-      if (!isPublicPath) {
-        router.push('/login');
-      } else {
+
+      // Se há usuário do Firebase, tente buscar o perfil no Firestore.
+      try {
+        const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+        const docSnap = await getDoc(userDocRef);
+        setUserProfile(docSnap.exists() ? (docSnap.data() as UserProfile) : null);
+      } catch (error) {
+        console.error("Erro ao buscar perfil do usuário:", error);
+        setUserProfile(null);
+      } finally {
+        // Apenas para de carregar DEPOIS de ter o perfil (ou a falta dele).
         setLoading(false);
       }
-    }
-  }, [firebaseUser, isUserLoading, firestore, pathname, router]);
+    };
 
+    processAuth();
+  }, [firebaseUser, isUserLoading, firestore]);
+  
+  useEffect(() => {
+    // Só execute a lógica de roteamento DEPOIS que o carregamento inicial estiver concluído.
+    if (loading) {
+      return;
+    }
+  
+    const publicPaths = ['/login', '/signup'];
+    const isPublicPath = publicPaths.includes(pathname);
+  
+    // Se não há perfil de usuário e a rota não é pública, redireciona para o login.
+    if (!userProfile && !isPublicPath) {
+      router.push('/login');
+    }
+    // Se há perfil e a rota é pública, redireciona para a home.
+    else if (userProfile && isPublicPath) {
+      router.push('/');
+    }
+  }, [userProfile, loading, pathname, router]);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
   
-  if (loading) {
+  const publicPaths = ['/login', '/signup'];
+  const isPublicPath = publicPaths.includes(pathname);
+
+  // Se estiver carregando, mostre o loader.
+  // Se não estiver logado e não for uma página pública, mostre o loader para evitar piscar a tela durante o redirecionamento.
+  if (loading || (!userProfile && !isPublicPath)) {
     return <FullScreenLoader />;
   }
 
