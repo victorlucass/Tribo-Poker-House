@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 interface DealerControlsProps {
   game: CashGame;
@@ -28,6 +29,7 @@ interface DealerControlsProps {
 const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onUpdateGame }) => {
   const { handState, players, dealerId } = game;
   const activePlayer = handState?.players.find(p => p.id === handState?.activePlayerId);
+  const { toast } = useToast();
 
   const [isBetModalOpen, setIsBetModalOpen] = useState(false);
   const [betAmount, setBetAmount] = useState<string>('');
@@ -35,14 +37,16 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
   const [selectedWinnerId, setSelectedWinnerId] = useState<string | null>(null);
 
   
-  const canAdvancePhase = useMemo(() => {
+  const canManuallyAdvance = useMemo(() => {
     if (!handState) return false;
-    const isBettingOver = checkEndOfBettingRound(handState.players, handState.lastRaise);
-    return isBettingOver && handState.phase !== 'SHOWDOWN' && handState.phase !== 'RIVER';
+    return checkEndOfBettingRound(handState);
   }, [handState]);
 
   const handleStartNewHand = () => {
-    if (!dealerId || players.length < 2) return;
+    if (!dealerId || players.length < 2) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'É preciso ter um dealer definido e pelo menos 2 jogadores para iniciar.'})
+      return;
+    }
     const { handState: newHand, nextDealerId } = startNewHand(players, dealerId, 1, 2); 
     onUpdateHand(newHand);
     onUpdateGame({ dealerId: nextDealerId });
@@ -50,19 +54,54 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
   
   const handleEndHandWithWinner = () => {
     if(!handState || !selectedWinnerId) return;
-    const updatedPlayers = awardPotToWinner(handState, players, selectedWinnerId);
+    
+    // Create a temporary state that includes the current bets for the award calculation
+    const finalHandStateForAward = {
+        ...handState,
+        pot: handState.pot + handState.players.reduce((acc, p) => acc + p.bet, 0)
+    };
+
+    const updatedPlayers = awardPotToWinner(finalHandStateForAward, game.players, selectedWinnerId);
+
     onUpdateGame({ players: updatedPlayers });
     onUpdateHand(null); // Clear the table for the next hand
     setIsWinnerModalOpen(false);
     setSelectedWinnerId(null);
   };
 
-  const handleAdvancePhase = () => {
-    if (!handState || !canAdvancePhase) return;
-    const betsCollectedState = collectBets(handState);
-    const nextPhaseState = advanceHandPhase(betsCollectedState);
+  const handleAdvancePhase = (currentState: HandState) => {
+    const betsCollectedState = collectBets(currentState);
+    const nextPhaseState = advanceHandPhase(betsCollectedState, game.dealerId!);
     onUpdateHand(nextPhaseState);
   };
+  
+  const processEndOfRound = (updatedHandState: HandState) => {
+     // Scenario 1: Only one player left who hasn't folded
+    const activePlayers = updatedHandState.players.filter(p => !p.isFolded);
+    if (activePlayers.length === 1) {
+        const winner = activePlayers[0];
+        const finalState = { ...updatedHandState, pot: updatedHandState.pot + updatedHandState.players.reduce((s, p) => s + p.bet, 0) };
+        const updatedGamePlayers = awardPotToWinner(finalState, game.players, winner.id);
+        toast({ title: "Fim da Mão!", description: `${winner.name} venceu o pote pois todos desistiram.`});
+        onUpdateGame({ players: updatedGamePlayers });
+        onUpdateHand(null); // Clear the table
+        return;
+    }
+
+    // Scenario 2: Betting round is over, advance the phase
+    if (checkEndOfBettingRound(updatedHandState)) {
+        if (updatedHandState.phase === 'RIVER' || updatedHandState.phase === 'SHOWDOWN') {
+            onUpdateHand({ ...updatedHandState, phase: 'SHOWDOWN' });
+            toast({ title: "Showdown!", description: "Rodada de apostas finalizada. Declare o vencedor."});
+        } else {
+            handleAdvancePhase(updatedHandState);
+        }
+        return;
+    }
+
+    // Scenario 3: Betting continues, just update the state
+    onUpdateHand(updatedHandState);
+  }
 
   const handlePlayerAction = (action: 'fold' | 'check-call' | 'bet' | 'all-in', amount?: number) => {
     if (!handState || !activePlayer) return;
@@ -81,20 +120,24 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
     } else if (action === 'check-call') {
         const highestBet = Math.max(...newPlayers.map(p => p.bet));
         const callAmount = highestBet - playerToUpdate.bet;
-        if(callAmount > 0) { // It's a call
-            const amountToCall = Math.min(callAmount, playerToUpdate.stack); // Cannot call more than stack
+
+        if (callAmount > 0) { // It's a call
+            const amountToCall = Math.min(callAmount, playerToUpdate.stack);
             playerToUpdate.stack -= amountToCall;
             playerToUpdate.bet += amountToCall;
-            if(playerToUpdate.stack === 0) {
+            if (playerToUpdate.stack === 0) {
                 playerToUpdate.isAllIn = true;
             }
-        } // Otherwise it's a check, no change in bet/stack
+        } // Otherwise it's a check, no change
     } else if (action === 'bet' && amount) {
-        const totalBet = amount;
-        const amountToPot = totalBet - playerToUpdate.bet;
+        const amountToPot = amount - playerToUpdate.bet;
+        if(amountToPot > playerToUpdate.stack) {
+            toast({ variant: 'destructive', title: 'Aposta Inválida', description: 'O jogador não tem fichas suficientes.' });
+            return;
+        }
         playerToUpdate.stack -= amountToPot;
-        playerToUpdate.bet = totalBet;
-        newLastRaise = totalBet;
+        playerToUpdate.bet = amount;
+        newLastRaise = amount; // The new total bet is the new raise amount to match
         if (playerToUpdate.stack === 0) {
             playerToUpdate.isAllIn = true;
         }
@@ -103,38 +146,32 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
         playerToUpdate.bet = allInAmount;
         playerToUpdate.stack = 0;
         playerToUpdate.isAllIn = true;
-        if(allInAmount > newLastRaise) {
+        if (allInAmount > newLastRaise) {
             newLastRaise = allInAmount;
         }
     }
     
     newPlayers[activePlayerIndex] = playerToUpdate;
     
-    const activePlayersLeft = newPlayers.filter(p => !p.isFolded);
-    if (activePlayersLeft.length === 1) {
-        const winner = activePlayersLeft[0];
-        const finalHandState = { ...handState, players: newPlayers };
-        const updatedGamePlayers = awardPotToWinner(finalHandState, game.players, winner.id);
-        onUpdateGame({ players: updatedGamePlayers });
-        onUpdateHand(null);
-        return;
-    }
-
     const nextPlayer = getNextPlayer(newPlayers, activePlayer.id);
 
-    onUpdateHand({
+    const updatedHandState = {
         ...handState,
         players: newPlayers,
         lastRaise: newLastRaise,
         activePlayerId: nextPlayer ? nextPlayer.id : null, 
-    });
+    };
+
+    processEndOfRound(updatedHandState);
   };
 
   const confirmBet = () => {
     const amount = parseFloat(betAmount);
-    if (!isNaN(amount) && amount > 0) {
-        handlePlayerAction('bet', amount);
+    if (isNaN(amount) || amount <= handState!.lastRaise) {
+        toast({ variant: 'destructive', title: 'Aposta Inválida', description: `O valor precisa ser maior que a última aposta (${handState!.lastRaise}).` });
+        return;
     }
+    handlePlayerAction('bet', amount);
     setIsBetModalOpen(false);
     setBetAmount('');
   }
@@ -165,14 +202,14 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
          <div className="flex items-center gap-4">
              <Dialog open={isWinnerModalOpen} onOpenChange={setIsWinnerModalOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="destructive">
-                        <Hand className="mr-2" /> Encerrar Mão
+                    <Button variant="destructive" disabled={handState.phase !== 'SHOWDOWN'}>
+                        <Hand className="mr-2" /> Declarar Vencedor
                     </Button>
                 </DialogTrigger>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Declarar Vencedor</DialogTitle>
-                        <DialogDescription>Selecione o vencedor da mão para distribuir o pote.</DialogDescription>
+                        <DialogTitle>Declarar Vencedor da Mão</DialogTitle>
+                        <DialogDescription>Selecione o vencedor da mão para distribuir o pote. O pote será calculado e o stack do jogador atualizado automaticamente.</DialogDescription>
                     </DialogHeader>
                     <div className="my-4 space-y-2">
                         <p className="text-center text-lg">Pote Total: <span className="font-bold text-primary">{
@@ -202,8 +239,8 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
                 </DialogContent>
              </Dialog>
 
-            <Button variant="secondary" onClick={handleAdvancePhase} disabled={!canAdvancePhase}>
-                <FastForward className="mr-2" /> Próxima Fase
+            <Button variant="secondary" onClick={() => handleAdvancePhase(handState)} disabled={!canManuallyAdvance}>
+                <FastForward className="mr-2" /> Próxima Fase (Manual)
             </Button>
          </div>
 
@@ -215,11 +252,11 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
         )}
 
         <div className="flex items-center gap-2">
-            <Button variant="outline" className="bg-transparent text-white" onClick={() => handlePlayerAction('fold')}><X className="mr-2"/> Fold</Button>
-            <Button variant="outline" className="bg-transparent text-white" onClick={() => handlePlayerAction('check-call')}><Check className="mr-2"/> Check/Call</Button>
+            <Button variant="outline" className="bg-transparent text-white" onClick={() => handlePlayerAction('fold')} disabled={!activePlayer}><X className="mr-2"/> Fold</Button>
+            <Button variant="outline" className="bg-transparent text-white" onClick={() => handlePlayerAction('check-call')} disabled={!activePlayer}><Check className="mr-2"/> Check/Call</Button>
             <Dialog open={isBetModalOpen} onOpenChange={setIsBetModalOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-blue-600 hover:bg-blue-700">
+                <Button className="bg-blue-600 hover:bg-blue-700" disabled={!activePlayer}>
                     <CircleDollarSign className="mr-2"/> Bet/Raise
                 </Button>
               </DialogTrigger>
@@ -227,12 +264,12 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
                 <DialogHeader>
                     <DialogTitle>Registrar Aposta / Aumento</DialogTitle>
                     <DialogDescription>
-                        Insira o valor **total** da aposta do jogador nesta rodada (incluindo apostas anteriores).
+                        Insira o valor **total** da aposta do jogador nesta rodada (incluindo apostas anteriores). O valor deve ser maior que a aposta anterior.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
                     <Label htmlFor="bet-amount">Valor Total da Aposta</Label>
-                    <Input id="bet-amount" type="number" inputMode="decimal" placeholder={`Mínimo: ${handState.lastRaise}`} value={betAmount} onChange={e => setBetAmount(e.target.value)} />
+                    <Input id="bet-amount" type="number" inputMode="decimal" placeholder={`Maior que ${handState.lastRaise}`} value={betAmount} onChange={e => setBetAmount(e.target.value)} />
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -242,7 +279,7 @@ const DealerControls: React.FC<DealerControlsProps> = ({ game, onUpdateHand, onU
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-             <Button className="bg-red-800 hover:bg-red-700" onClick={handleAllIn}>
+             <Button className="bg-red-800 hover:bg-red-700" onClick={handleAllIn} disabled={!activePlayer}>
                 <Flame className="mr-2"/> All-In
             </Button>
         </div>

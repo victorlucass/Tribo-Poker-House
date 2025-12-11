@@ -18,7 +18,7 @@ export default function DealerPage() {
   const params = useParams();
   const gameId = params.id as string;
   const router = useRouter();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin } = useAuth();
   const { toast } = useToast();
 
   const firestore = useFirestore();
@@ -33,9 +33,11 @@ export default function DealerPage() {
   const [showCommunityCardAnimation, setShowCommunityCardAnimation] = useState(false);
   const [previousPhase, setPreviousPhase] = useState<string | undefined>(undefined);
 
+  const canManageGame = isAdmin || isSuperAdmin || (game?.ownerId === user?.uid);
+
   // Set this user as the croupier on entering the page
   useEffect(() => {
-    if (!gameRef || !user || !isAdmin || status !== 'success' || !game) return;
+    if (!gameRef || !user || !canManageGame || status !== 'success' || !game) return;
 
     const claimCroupierSeat = async () => {
       // Re-fetch to get latest data before updating
@@ -52,9 +54,14 @@ export default function DealerPage() {
     
     // On unmount, release the croupier seat
     return () => {
-      updateDocumentNonBlocking(gameRef, { croupierId: null });
+      // Check if this user is still the croupier before releasing
+      getDoc(gameRef).then(docSnap => {
+        if (docSnap.exists() && docSnap.data().croupierId === user.uid) {
+           updateDocumentNonBlocking(gameRef, { croupierId: null });
+        }
+      })
     };
-  }, [gameRef, user, isAdmin, status, game]);
+  }, [gameRef, user, canManageGame, status, game]);
   
   // Monitor phase changes to trigger animations
   useEffect(() => {
@@ -118,16 +125,14 @@ export default function DealerPage() {
   
   // Only admins can be croupiers, and only one at a time.
   const isCroupierOccupied = game.croupierId && game.croupierId !== user?.uid;
-  if (!isAdmin || isCroupierOccupied) {
+  if (!canManageGame) {
     return (
        <div className="flex h-screen items-center justify-center">
         <Card className="max-w-lg text-center">
           <CardHeader>
             <CardTitle>Acesso Negado</CardTitle>
             <CardDescription>
-             {isCroupierOccupied 
-                ? 'Outro administrador já está no modo Croupier. Apenas um por vez.'
-                : 'Apenas administradores podem acessar o modo Croupier.'}
+             { 'Apenas administradores ou o dono da sala podem acessar o modo Croupier.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -139,6 +144,27 @@ export default function DealerPage() {
       </div>
     );
   }
+  
+    if (isCroupierOccupied) {
+    return (
+       <div className="flex h-screen items-center justify-center">
+        <Card className="max-w-lg text-center">
+          <CardHeader>
+            <CardTitle>Acesso Negado</CardTitle>
+            <CardDescription>
+             {'Outro administrador já está no modo Croupier. Apenas um por vez.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+                <Link href={`/cash-game/${gameId}`}>Voltar para Sala</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
 
   // Ensure positions are set before allowing dealer mode
   if (!game.positionsSet) {
@@ -205,5 +231,3 @@ export default function DealerPage() {
     </div>
   );
 }
-
-    

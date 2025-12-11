@@ -73,41 +73,47 @@ export const sortPlayersAndSetDealer = (players: CashGamePlayer[]): { playersWit
 };
 
 export function getNextPlayer(players: PlayerHandState[], currentActivePlayerId: string | null): PlayerHandState | null {
+    if (!currentActivePlayerId) return null;
+
     const activePlayers = players.filter(p => !p.isFolded && !p.isAllIn);
-    if (activePlayers.length <= 1) return null; // No next player if only one or zero left
+    if (activePlayers.length === 0) return null; // No one to act
 
-    const currentIndex = currentActivePlayerId ? activePlayers.findIndex(p => p.id === currentActivePlayerId) : -1;
-    // If current player isn't found (e.g. they folded), start from the beginning
-    const nextIndex = (currentIndex + 1) % activePlayers.length;
-    
-    const nextPlayer = activePlayers[nextIndex];
+    const sortedActivePlayers = activePlayers.sort((a, b) => a.seat - b.seat);
+    const currentIndex = sortedActivePlayers.findIndex(p => p.id === currentActivePlayerId);
 
-    // Check if everyone has acted (or is all-in)
-    const allActed = activePlayers.every(p => p.hasActed || p.isAllIn);
-    if (allActed) {
-        // And check if all bets are equal
-        const highestBet = Math.max(...activePlayers.map(p => p.bet));
-        const allBetsEqual = activePlayers.every(p => p.bet === highestBet || p.isAllIn);
-        if (allBetsEqual) {
-            return null; // End of betting round
+    if (currentIndex === -1) {
+        // This case can happen if the current player folded or went all-in
+        // We need to find the "next" player from their seat position in the full list
+        const fullPlayerList = [...players].sort((a, b) => a.seat - b.seat);
+        const lastPlayerSeat = players.find(p => p.id === currentActivePlayerId)?.seat || 0;
+        
+        for (let i = 1; i <= fullPlayerList.length; i++) {
+            const nextSeat = (lastPlayerSeat + i -1) % fullPlayerList.length;
+            const nextPlayer = fullPlayerList[nextSeat];
+            if (!nextPlayer.isFolded && !nextPlayer.isAllIn) {
+                return nextPlayer;
+            }
         }
+        return null;
     }
-    
-    return nextPlayer;
+
+    const nextIndex = (currentIndex + 1) % sortedActivePlayers.length;
+    return sortedActivePlayers[nextIndex];
 }
 
 
-export function checkEndOfBettingRound(players: PlayerHandState[], lastRaise: number): boolean {
-    const activePlayers = players.filter(p => !p.isFolded); // include all-in players
-    if (activePlayers.length < 2) return true; // Round ends if only one player is left
+export function checkEndOfBettingRound(handState: HandState): boolean {
+    const activePlayers = handState.players.filter(p => !p.isFolded);
+    if (activePlayers.length < 2) return true;
 
-    // Everyone has had a chance to act since the last raise
-    const allHaveActed = activePlayers.every(p => p.hasActed || p.isAllIn);
+    // All players who are not folded or all-in must have had a chance to act.
+    const playersWhoMustAct = activePlayers.filter(p => !p.isAllIn);
+    const allHaveActed = playersWhoMustAct.every(p => p.hasActed);
     if (!allHaveActed) return false;
-    
-    const highestBet = Math.max(...players.map(p => p.bet));
-    // All active, non-all-in players have matched the highest bet
-    const allBetsEqual = activePlayers.every(p => p.isAllIn || p.bet === highestBet);
+
+    // And all those players must have the same bet amount.
+    const highestBet = Math.max(...playersWhoMustAct.map(p => p.bet));
+    const allBetsEqual = playersWhoMustAct.every(p => p.bet === highestBet);
 
     return allBetsEqual;
 }
@@ -116,138 +122,148 @@ export function collectBets(handState: HandState): HandState {
     let newPot = handState.pot;
     const newPlayers = handState.players.map(p => {
         newPot += p.bet;
-        return { ...p, bet: 0, hasActed: false };
+        return { ...p, bet: 0 }; // Keep hasActed for next logic step
     });
     return { ...handState, pot: newPot, players: newPlayers, lastRaise: 0 };
 }
 
 
 export function awardPotToWinner(handState: HandState, gamePlayers: CashGamePlayer[], winnerId: string): CashGamePlayer[] {
-    const winner = handState.players.find(p => p.id === winnerId);
+    const winnerInHand = handState.players.find(p => p.id === winnerId);
+    if (!winnerInHand) return gamePlayers;
 
-    if (!winner) return gamePlayers;
+    const totalPot = handState.pot; // Assumes pot is already collected
 
-    const totalPot = handState.pot + handState.players.reduce((sum, p) => sum + p.bet, 0);
-
-    const updatedGamePlayers = gamePlayers.map(gp => {
+    return gamePlayers.map(gp => {
         const playerInHand = handState.players.find(p => p.id === gp.id);
-        
         if (!playerInHand) return gp; // Player wasn't in this hand
-        
+
         let newStack = playerInHand.stack;
         if(gp.id === winnerId) {
             newStack += totalPot;
         }
 
-        const buyInTx = gp.transactions.find(t => t.type === 'buy-in');
-        if (!buyInTx) return gp; // Should not happen
-
-        // We create a new transaction array where the first transaction (buy-in) is updated with the new total stack value
-        const updatedTransactions = [...gp.transactions];
-        const newAmount = newStack;
-        // This is a simplification: we're modifying the 'buy-in' transaction to reflect the new stack.
-        // A better approach would be a dedicated 'stack' field on the CashGamePlayer.
-        // For now, this works by consolidating the stack value.
-        updatedTransactions[0] = { ...updatedTransactions[0], amount: newAmount };
-
-        // Filter out temporary "rebuy" transactions that were just for stack tracking if they exist
-        const finalTransactions = updatedTransactions.filter(t => t.type === 'buy-in');
-        finalTransactions[0].amount = newAmount;
-
-        return { ...gp, transactions: finalTransactions };
+        // Find the most recent transaction and update its amount to reflect the new stack
+        const updatedTransactions = [...gp.transactions].sort((a,b) => b.id - a.id);
+        if(updatedTransactions.length > 0) {
+            // Instead of modifying, we replace the transaction array with one that represents the final state.
+            // This is a simplification. A better model would have a separate 'stack' field on the root CashGamePlayer.
+            const newTransaction = { id: 1, type: 'buy-in' as const, amount: newStack, chips: [] };
+             return { ...gp, transactions: [newTransaction] };
+        }
+        
+        return gp; // Return original player if no transactions found
     });
-
-    return updatedGamePlayers;
 }
 
 
-export function advanceHandPhase(handState: HandState): HandState {
+export function advanceHandPhase(handState: HandState, dealerId: string): HandState {
     const deck = handState.deck || shuffleDeck(createDeck());
     const newCommunityCards = [...handState.communityCards];
 
     let nextPhase: GamePhase = handState.phase;
 
+    // Burn card and deal
     if (handState.phase === 'PRE_FLOP') {
         nextPhase = 'FLOP';
-        deck.pop(); // Burn card
+        deck.pop(); // Burn
         newCommunityCards.push(deck.pop()!, deck.pop()!, deck.pop()!);
     } else if (handState.phase === 'FLOP') {
         nextPhase = 'TURN';
-        deck.pop(); // Burn card
+        deck.pop(); // Burn
         newCommunityCards.push(deck.pop()!);
     } else if (handState.phase === 'TURN') {
         nextPhase = 'RIVER';
-        deck.pop(); // Burn card
+        deck.pop(); // Burn
         newCommunityCards.push(deck.pop()!);
     } else if (handState.phase === 'RIVER') {
         nextPhase = 'SHOWDOWN';
     }
 
-    // After a betting round, the first player to act is the first active player to the left of the dealer.
+    // After a betting round, the first player to act is the first active player to the left of the dealer button.
     const sortedPlayers = [...handState.players].sort((a,b) => a.seat - b.seat);
-    const dealerIndex = sortedPlayers.findIndex(p => p.id === handState.smallBlindPlayerId); // Close enough for this logic
+    const dealerSeatIndex = sortedPlayers.findIndex(p => p.id === dealerId);
     
     let firstToAct: PlayerHandState | null = null;
     for(let i = 1; i <= sortedPlayers.length; i++) {
-        const p = sortedPlayers[(dealerIndex + i) % sortedPlayers.length];
-        if(!p.isFolded && !p.isAllIn) {
+        const p = sortedPlayers[(dealerSeatIndex + i) % sortedPlayers.length];
+        if(p && !p.isFolded && !p.isAllIn) {
             firstToAct = p;
             break;
         }
     }
-
 
     return {
         ...handState,
         phase: nextPhase,
         communityCards: newCommunityCards,
         deck: deck,
-        activePlayerId: firstToAct ? firstToAct.id : null,
-        players: handState.players.map(p => ({...p, hasActed: false})), // Reset hasActed for new round
+        activePlayerId: firstToAct ? firstToAct.id : null, // If no one can act, it's null
+        players: handState.players.map(p => ({...p, hasActed: false})), // Reset hasActed for the new round
     };
 }
 
 
 export function startNewHand(players: CashGamePlayer[], currentDealerId: string, smallBlind: number, bigBlind: number): { handState: HandState, nextDealerId: string } {
-    const deck = shuffleDeck(createDeck());
-    const sortedPlayers = [...players].sort((a, b) => a.seat! - b.seat!);
-    
-    const currentDealerIndex = sortedPlayers.findIndex(p => p.id === currentDealerId);
-    const nextDealerIndex = (currentDealerIndex + 1) % sortedPlayers.length;
-    const nextDealer = sortedPlayers[nextDealerIndex];
-    
-    const activePlayers = sortedPlayers.filter(p => p.transactions.reduce((acc, t) => acc + t.amount, 0) > 0);
-    if(activePlayers.length < 2) throw new Error("Not enough players with stacks to start a hand.");
-
-
-    const findNextActivePlayerIndex = (startIndex: number) => {
-        let currentIndex = startIndex;
-        do {
-            currentIndex = (currentIndex + 1) % sortedPlayers.length;
-        } while (sortedPlayers[currentIndex].transactions.reduce((acc, t) => acc + t.amount, 0) <= 0);
-        return currentIndex;
+    if (players.length < 2) {
+      throw new Error("Not enough players to start a hand.");
     }
 
-    const dealerActualIndex = sortedPlayers.findIndex(p => p.id === nextDealer.id);
+    const sortedPlayersBySeat = [...players].sort((a, b) => a.seat! - b.seat!);
+    
+    // Determine the next dealer
+    const currentDealerSeatIndex = sortedPlayersBySeat.findIndex(p => p.id === currentDealerId);
+    let nextDealerIndex = (currentDealerSeatIndex + 1) % sortedPlayersBySeat.length;
+    const nextDealer = sortedPlayersBySeat[nextDealerIndex];
+
+    const findNextActivePlayerIndex = (startIndex: number): number => {
+        let currentIndex = startIndex;
+        let loops = 0;
+        while(loops < sortedPlayersBySeat.length) {
+            currentIndex = (currentIndex + 1) % sortedPlayersBySeat.length;
+            const player = sortedPlayersBySeat[currentIndex];
+            if (player && player.transactions.reduce((acc, t) => acc + t.amount, 0) > 0) {
+                return currentIndex;
+            }
+            loops++;
+        }
+        return -1; // No active players found
+    }
+
+    const dealerActualIndex = sortedPlayersBySeat.findIndex(p => p.id === nextDealer.id);
     const smallBlindIndex = findNextActivePlayerIndex(dealerActualIndex);
     const bigBlindIndex = findNextActivePlayerIndex(smallBlindIndex);
-
-    const smallBlindPlayer = sortedPlayers[smallBlindIndex];
-    const bigBlindPlayer = sortedPlayers[bigBlindIndex];
-    
     const firstToActIndex = findNextActivePlayerIndex(bigBlindIndex);
-    const firstToActPlayer = sortedPlayers[firstToActIndex];
 
-    const getPlayerStack = (player: CashGamePlayer): number => {
-        // Correctly calculates stack from all transactions
-        return player.transactions.reduce((acc, t) => acc + t.amount, 0);
+    if (smallBlindIndex === -1 || bigBlindIndex === -1 || firstToActIndex === -1) {
+        throw new Error("Could not determine blinds or first player to act. Check player stacks.");
     }
 
-    const playerHandStates: PlayerHandState[] = sortedPlayers.map(p => {
+    const smallBlindPlayer = sortedPlayersBySeat[smallBlindIndex];
+    const bigBlindPlayer = sortedPlayersBySeat[bigBlindIndex];
+    const firstToActPlayer = sortedPlayersBySeat[firstToActIndex];
+    
+    const deck = shuffleDeck(createDeck());
+    const getPlayerStack = (player: CashGamePlayer): number => {
+        return player.transactions.reduce((acc, t) => acc + t.amount, 0);
+    }
+    
+    let tempPot = 0;
+    const playerHandStates: PlayerHandState[] = sortedPlayersBySeat.map(p => {
         const stack = getPlayerStack(p);
         let bet = 0;
-        if (p.id === smallBlindPlayer.id) bet = Math.min(smallBlind, stack);
-        if (p.id === bigBlindPlayer.id) bet = Math.min(bigBlind, stack);
+        let isAllIn = false;
+
+        if (p.id === smallBlindPlayer.id) {
+            bet = Math.min(smallBlind, stack);
+            if (bet === stack) isAllIn = true;
+        }
+        if (p.id === bigBlindPlayer.id) {
+            bet = Math.min(bigBlind, stack);
+            if (bet === stack) isAllIn = true;
+        }
+        
+        tempPot += bet;
         
         return {
             id: p.id,
@@ -259,13 +275,13 @@ export function startNewHand(players: CashGamePlayer[], currentDealerId: string,
             card2: deck.pop(),
             hasActed: false,
             isFolded: false,
-            isAllIn: (stack - bet) === 0,
+            isAllIn: isAllIn,
         };
     });
 
     const handState: HandState = {
         phase: 'PRE_FLOP',
-        pot: playerHandStates.reduce((acc, p) => acc + p.bet, 0),
+        pot: 0, // Pot will be collected at end of betting round
         communityCards: [],
         deck: deck,
         activePlayerId: firstToActPlayer.id,
@@ -279,4 +295,3 @@ export function startNewHand(players: CashGamePlayer[], currentDealerId: string,
 
     return { handState, nextDealerId: nextDealer.id };
 }
-
