@@ -34,18 +34,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This effect is responsible for fetching the user profile and setting the final loading state.
+    // This effect handles the entire auth flow: user check, profile fetch, and loading state.
     if (isUserLoading) {
-      return; // Wait until Firebase Auth is ready
+      // Still waiting for Firebase Auth to initialize.
+      return;
     }
 
     if (firebaseUser && firestore) {
+      // User is authenticated with Firebase, now fetch their profile from Firestore.
       const userDocRef = doc(firestore, 'users', firebaseUser.uid);
       getDoc(userDocRef)
         .then(docSnap => {
           if (docSnap.exists()) {
             setUserProfile(docSnap.data() as UserProfile);
           } else {
+            // This case might happen if a user is created in Auth but their Firestore doc creation failed.
             console.warn("User profile not found in Firestore for UID:", firebaseUser.uid);
             setUserProfile(null);
           }
@@ -55,36 +58,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUserProfile(null);
         })
         .finally(() => {
+          // All async operations are done for a logged-in user.
           setLoading(false);
         });
     } else {
-      // No firebaseUser, so no profile to fetch.
+      // No Firebase user, so authentication is complete.
       setUserProfile(null);
       setLoading(false);
     }
   }, [firebaseUser, isUserLoading, firestore]);
 
   useEffect(() => {
-    // This effect handles redirection and should only run when the auth state is fully resolved.
+    // This effect handles redirection and should ONLY run when the auth state is fully resolved (loading is false).
     if (loading) {
       return;
     }
 
     const publicPaths = ['/login', '/signup'];
     const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
-    
-    // If we are on a private path and there's no user, redirect to login.
-    if (!isPublicPath && !userProfile) {
-        router.push('/login');
+
+    if (!userProfile && !isPublicPath) {
+      // If we are on a private path and there's definitively no user, redirect.
+      router.push('/login');
     }
+    
+    if (userProfile && isPublicPath) {
+      // If user is logged in and on a public page, redirect them to the app's main page
+      router.push('/cash-game');
+    }
+
   }, [loading, userProfile, pathname, router]);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
   
+  // While loading, show a loader on private pages. Public pages can render immediately.
   const publicPaths = ['/login', '/signup'];
   const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
   
-  // While loading, show a loader on private pages. Public pages can render immediately.
   if (loading && !isPublicPath) {
     return <FullScreenLoader />;
   }
