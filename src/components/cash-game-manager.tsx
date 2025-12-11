@@ -761,7 +761,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
             )}
         </header>
 
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <Card className="lg:hidden">
               <CardHeader>
@@ -794,6 +793,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                       />
                       <Input
                           type="number"
+                          inputMode="decimal"
                           placeholder="Valor do Buy-in (R$)"
                           value={newPlayerBuyIn}
                           onChange={(e) => setNewPlayerBuyIn(e.target.value)}
@@ -1040,6 +1040,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                           <Input
                             id="rebuy-amount"
                             type="number"
+                            inputMode="decimal"
                             placeholder="Ex: 50"
                             value={rebuyAmount}
                             onChange={(e) => setRebuyAmount(e.target.value)}
@@ -1151,6 +1152,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                 <span className="mr-2 text-sm">R$</span>
                                 <Input
                                 type="number"
+                                inputMode="decimal"
                                 step="0.01"
                                 value={chip.value}
                                 onChange={(e) => {
@@ -1210,6 +1212,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                 <Input
                                 id="chip-value"
                                 type="number"
+                                inputMode="decimal"
                                 value={newChip.value}
                                 onChange={(e) => setNewChip({ ...newChip, value: e.target.value })}
                                 className="col-span-3"
@@ -1320,6 +1323,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                     <TableCell key={chip.id}>
                                         <Input
                                         type="number"
+                                        inputMode="decimal"
                                         className="w-16 text-center font-mono mx-auto"
                                         min="0"
                                         value={pFinalChips.get(chip.id) || ''}
@@ -1362,6 +1366,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                     <Input
                                     id={`tips-chip-${chip.id}`}
                                     type="number"
+                                    inputMode="decimal"
                                     min="0"
                                     placeholder="Qtd."
                                     className="font-mono text-center"
@@ -1402,6 +1407,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                     <Input
                                     id={`rake-chip-${chip.id}`}
                                     type="number"
+                                    inputMode="decimal"
                                     min="0"
                                     placeholder="Qtd."
                                     className="font-mono text-center"
@@ -1570,6 +1576,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 <Input
                   id={`cashout-chip-${chip.id}`}
                   type="number"
+                  inputMode="decimal"
                   className="col-span-2"
                   min="0"
                   placeholder="Quantidade"
@@ -1614,6 +1621,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 <Input
                   id={`dist-chip-${chip.id}`}
                   type="number"
+                  inputMode="decimal"
                   className="col-span-2"
                   min="0"
                   placeholder="Quantidade"
