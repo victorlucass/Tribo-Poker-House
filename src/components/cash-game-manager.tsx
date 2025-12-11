@@ -61,7 +61,7 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc } from '@/firebase';
-import { doc, setDoc, deleteDoc, updateDoc, collection } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
