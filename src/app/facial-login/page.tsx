@@ -28,12 +28,14 @@ export default function FacialLoginPage() {
     const loadModels = async () => {
       const MODEL_URL = '/models';
       try {
+        console.log("Loading models from:", MODEL_URL);
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
           faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
         ]);
+        console.log("Models loaded successfully");
         setIsModelsLoading(false);
       } catch (error) {
         console.error("Erro ao carregar os modelos da IA:", error);
@@ -67,7 +69,9 @@ export default function FacialLoginPage() {
         });
       }
     };
-    startVideo();
+    if(!isModelsLoading) {
+      startVideo();
+    }
   }, [isModelsLoading, toast, hasCameraPermission]);
 
   // Realiza a detecção facial
@@ -75,22 +79,26 @@ export default function FacialLoginPage() {
     if(isModelsLoading || hasCameraPermission !== true || !videoRef.current) return;
 
     const interval = setInterval(async () => {
-        if (videoRef.current && canvasRef.current) {
+        if (videoRef.current && videoRef.current.readyState === 4) { // Check if video is ready
             const detections = await faceapi.detectAllFaces(videoRef.current, new faceapi.TinyFaceDetectorOptions())
                 .withFaceLandmarks()
                 .withFaceDescriptors();
 
-            const canvas = canvasRef.current;
-            const video = videoRef.current;
-            const displaySize = { width: video.clientWidth, height: video.clientHeight };
-            faceapi.matchDimensions(canvas, displaySize);
-            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            if (canvasRef.current) {
+              const canvas = canvasRef.current;
+              const video = videoRef.current;
+              const displaySize = { width: video.clientWidth, height: video.clientHeight };
+              faceapi.matchDimensions(canvas, displaySize);
+              const resizedDetections = faceapi.resizeResults(detections, displaySize);
 
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                //faceapi.draw.drawDetections(canvas, resizedDetections);
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                  ctx.clearRect(0, 0, canvas.width, canvas.height);
+                  // Opcional: desenhar detecções para debug
+                  // faceapi.draw.drawDetections(canvas, resizedDetections);
+              }
             }
+
 
             if (detections.length === 1) {
                 setDetectionStatus('face-detected');

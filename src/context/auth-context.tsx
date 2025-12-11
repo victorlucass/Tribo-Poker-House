@@ -35,7 +35,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // This effect now controls the entire auth flow, from start to finish.
+    // This effect manages the entire auth flow sequentially.
     const manageAuthFlow = async () => {
       // 1. Wait for Firebase Auth to determine if a user is logged in.
       if (isUserLoading) {
@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUserProfile(docSnap.data() as UserProfile);
           } else {
             console.warn("User exists in Auth, but not in Firestore.", firebaseUser.uid);
-            setUserProfile(null);
+            setUserProfile(null); // No profile found, treat as logged out.
           }
         } catch (error) {
           console.error("Error fetching user profile:", error);
@@ -108,6 +108,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // This final case handles the moment on a protected path right after loading finishes
   // but before the redirection useEffect kicks in. It shows the loader to prevent a flicker.
+  // It also correctly handles the logged-out state on protected paths.
   return <FullScreenLoader />;
 };
 
