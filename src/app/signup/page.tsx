@@ -48,6 +48,11 @@ export default function SignupPage() {
         displayName: name,
       });
 
+      // Determine user role
+      const isAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL === email;
+      const role = isAdmin ? 'admin' : 'player';
+
+
       // Create user profile document in Firestore
       const userDocRef = doc(firestore, 'users', user.uid);
       await setDoc(userDocRef, {
@@ -55,7 +60,7 @@ export default function SignupPage() {
         name,
         nickname,
         email: user.email,
-        role: 'player', // Default role
+        role: role,
       });
 
       toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });

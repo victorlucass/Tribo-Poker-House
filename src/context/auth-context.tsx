@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [firebaseUser, isUserLoading, firestore, pathname, router]);
 
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root' || userProfile?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
   if (loading) {
     return <FullScreenLoader />;
