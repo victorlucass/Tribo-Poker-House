@@ -66,7 +66,7 @@ export interface CashedOutPlayer {
 export interface JoinRequest {
     userId: string;
     userName: string;
-    status: 'pending';
+    status: 'pending' | 'approved' | 'declined';
     requestedAt: string;
 }
 

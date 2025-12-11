@@ -56,6 +56,8 @@ import {
   Lock,
   Check,
   X,
+  Hourglass,
+  ThumbsDown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -65,12 +67,13 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc, setDoc, deleteDoc, updateDoc, arrayRemove, getDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc, getDoc, arrayUnion } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { useAuth } from '@/context/auth-context';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 const ChipIcon = ({ color, className }: { color: string; className?: string }) => (
   <div
@@ -200,25 +203,37 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const { data: game, status, error } = useDoc<CashGame>(gameRef);
 
   const updateGame = useCallback(
-    (data: Partial<CashGame>) => {
+    async (data: Partial<CashGame>) => {
       if (!gameRef) return;
-      updateDoc(gameRef, data).catch((serverError) => {
+      try {
+        await updateDoc(gameRef, data);
+      } catch (serverError) {
         const permissionError = new FirestorePermissionError({
           path: gameRef.path,
           operation: 'update',
           requestResourceData: data,
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
-      });
+      }
     },
     [gameRef]
   );
-
+  
   const chips = game?.chips ?? [];
   const players = game?.players ?? [];
   const cashedOutPlayers = game?.cashedOutPlayers ?? [];
   const positionsSet = game?.positionsSet ?? false;
   const requests = game?.requests ?? [];
+
+  const currentUserStatus = useMemo(() => {
+    if (!user || !game) return 'spectator';
+    if (game.players.some(p => p.id === user.uid)) return 'player';
+    const userRequest = game.requests.find(r => r.userId === user.uid);
+    if (userRequest) return userRequest.status; // 'pending' | 'approved' | 'declined'
+    if (game.ownerId === user.uid || isAdmin) return 'player'; // Admins are implicitly players
+    return 'spectator';
+  }, [user, game, isAdmin]);
+
 
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerBuyIn, setNewPlayerBuyIn] = useState('');
@@ -362,13 +377,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       setNewPlayerName('');
       setNewPlayerBuyIn('');
     } else if (type === 'approve' && request) {
-        const gameDoc = await getDoc(gameRef);
-        if (!gameDoc.exists()) {
-          toast({ variant: 'destructive', title: 'Erro', description: 'A sala não existe mais.' });
-          return;
-        }
-        const currentGameData = gameDoc.data() as CashGame;
-
         let seat: number | undefined = undefined;
         if (currentGameData.positionsSet) {
             const occupiedSeats = new Set(currentGameData.players.map((p) => p.seat));
@@ -399,9 +407,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
         }
 
         // Atomically update players and requests
-        const updatedRequests = currentGameData.requests.filter(r => r.userId !== request.userId);
+        const updatedRequests = currentGameData.requests.map(r => r.userId === request.userId ? { ...r, status: 'approved' as const } : r);
     
-        updateGame({
+        await updateGame({
             players: updatedPlayers,
             requests: updatedRequests
         });
@@ -448,13 +456,17 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     });
   };
 
-  const handleDeclineRequest = (request: JoinRequest) => {
-    if (!gameRef) return;
-    updateDoc(gameRef, {
-      requests: arrayRemove(request),
-    }).then(() => {
-      toast({ title: 'Solicitação Recusada', description: `O pedido de ${request.userName} foi recusado.` });
-    });
+ const handleDeclineRequest = async (request: JoinRequest) => {
+    if (!gameRef || !game) return;
+    const updatedRequests = game.requests.map(r => 
+        r.userId === request.userId ? { ...r, status: 'declined' as const } : r
+    );
+    try {
+        await updateDoc(gameRef, { requests: updatedRequests });
+        toast({ title: 'Solicitação Recusada', description: `O pedido de ${request.userName} foi recusado.` });
+    } catch (error) {
+        console.error('Failed to decline request', error)
+    }
   };
 
   const removePlayer = (id: string) => {
@@ -715,6 +727,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     }
   };
 
+  const isUserGameOwner = useMemo(() => game?.ownerId === user?.uid, [game, user]);
+  const canManageGame = isAdmin || isUserGameOwner;
+
   if (status === 'loading' || isAuthLoading) {
     return (
       <div className="min-h-screen w-full bg-background p-4 md:p-8">
@@ -764,6 +779,8 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     navigator.clipboard.writeText(gameId);
     toast({ title: 'ID da Sala Copiado!', description: 'Você pode compartilhar este ID com seus amigos.' });
   };
+  
+  const pendingRequests = requests.filter(r => r.status === 'pending');
 
   return (
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
@@ -793,6 +810,20 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
           </Button>
         </header>
 
+        {currentUserStatus === 'pending' && (
+          <Alert className="mb-8 border-amber-500 text-amber-500">
+            <Hourglass className="h-4 w-4 !text-amber-500" />
+            <AlertTitle>Aguardando Aprovação</AlertTitle>
+            <AlertDescription>Sua solicitação para entrar na mesa está pendente. O administrador precisa aprová-la.</AlertDescription>
+          </Alert>
+        )}
+        {currentUserStatus === 'declined' && (
+          <Alert variant="destructive" className="mb-8">
+            <ThumbsDown className="h-4 w-4" />
+            <AlertTitle>Solicitação Recusada</AlertTitle>
+            <AlertDescription>Sua solicitação para entrar na mesa foi recusada pelo administrador. Entre em contato com ele para mais informações.</AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <Card className="lg:hidden">
@@ -810,7 +841,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
           </Card>
 
           <main className="lg:col-span-2 space-y-8">
-            {isAdmin && (
+            {canManageGame && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -856,7 +887,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               </Card>
             )}
 
-            {isAdmin && requests.length > 0 && (
+            {canManageGame && pendingRequests.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-primary">
@@ -865,7 +896,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                   <CardDescription>Aprove ou recuse os jogadores que pediram para entrar na sala.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {requests.map((req) => (
+                  {pendingRequests.map((req) => (
                     <div key={req.userId} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                       <div>
                         <p className="font-semibold">{req.userName}</p>
@@ -934,7 +965,8 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 </CardContent>
               </Card>
             )}
-
+            
+            {(currentUserStatus === 'player' || currentUserStatus === 'spectator' || canManageGame) && (
             <Dialog
               onOpenChange={(isOpen) => {
                 if (!isOpen) {
@@ -949,7 +981,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                     <CardTitle>Jogadores na Mesa</CardTitle>
                     <CardDescription>Distribuição de fichas e ações para cada jogador ativo.</CardDescription>
                   </div>
-                  {!positionsSet && players.length > 1 && isAdmin && (
+                  {!positionsSet && players.length > 1 && canManageGame && (
                     <Button onClick={handleStartDealing} variant="secondary">
                       <Shuffle className="mr-2 h-4 w-4" />
                       Sortear Posições
@@ -1007,7 +1039,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                       variant="outline"
                                       size="sm"
                                       onClick={() => setPlayerForDetails(player)}
-                                      disabled={!isAdmin}
+                                      disabled={!canManageGame}
                                     >
                                       <FileText className="h-4 w-4" />
                                     </Button>
@@ -1016,13 +1048,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handleOpenCashOut(player)}
-                                    disabled={!isAdmin}
+                                    disabled={!canManageGame}
                                   >
                                     <LogOut className="h-4 w-4" />
                                   </Button>
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="icon" disabled={!isAdmin || players.length > 0}>
+                                      <Button variant="ghost" size="icon" disabled={!canManageGame || players.length > 0}>
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                       </Button>
                                     </DialogTrigger>
@@ -1192,6 +1224,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                 )}
               </DialogContent>
             </Dialog>
+            )}
 
             {cashedOutPlayers.length > 0 && (
               <Card>
@@ -1259,7 +1292,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               </CardContent>
             </Card>
 
-            {isAdmin && (
+            {canManageGame && (
               <>
                 <Card>
                   <CardHeader>
@@ -1394,7 +1427,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                   <CardFooter>
                     <Dialog open={isSettlementOpen} onOpenChange={setIsSettlementOpen}>
                       <DialogTrigger asChild>
-                        <Button className="w-full" disabled={!isAdmin || players.length === 0}>
+                        <Button className="w-full" disabled={!canManageGame || players.length === 0}>
                           Iniciar Acerto de Contas
                         </Button>
                       </DialogTrigger>

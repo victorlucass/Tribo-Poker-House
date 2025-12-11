@@ -101,22 +101,27 @@ export default function CashGameLandingPage() {
           return;
         }
 
-        const alreadyPlayer = gameData.players.some((p: any) => p.id === user.uid);
-        const alreadyCashedOut = gameData.cashedOutPlayers.some((p: any) => p.id === user.uid);
-        const alreadyRequested = gameData.requests.some((r: any) => r.userId === user.uid);
+        const isPlayer = gameData.players.some((p: any) => p.id === user.uid);
+        const hasCashedOut = gameData.cashedOutPlayers.some((p: any) => p.id === user.uid);
+        const existingRequest = gameData.requests.find((r: any) => r.userId === user.uid);
 
-        if (alreadyPlayer || alreadyCashedOut) {
-          toast({ title: 'Você já faz parte desta sala', description: 'Redirecionando...' });
-          router.push(`/cash-game/${gameId}`);
-          return;
+        if (isPlayer || hasCashedOut) {
+           router.push(`/cash-game/${gameId}`);
+           return;
         }
 
-        if (alreadyRequested) {
-          toast({ variant: 'destructive', title: 'Solicitação Pendente', description: 'Você já pediu para entrar. Aguarde a aprovação.' });
-          setIsJoining(false);
-          return;
+        if (existingRequest) {
+            if(existingRequest.status === 'declined') {
+                toast({ variant: 'destructive', title: 'Solicitação Recusada', description: 'Seu pedido para entrar na sala foi recusado pelo administrador.' });
+                setIsJoining(false);
+                return;
+            }
+            // If pending or approved, let them in to spectate or play
+            router.push(`/cash-game/${gameId}`);
+            return;
         }
 
+        // No request exists, create a new one
         const newRequest: JoinRequest = {
           userId: user.uid,
           userName: user.nickname,
@@ -128,8 +133,9 @@ export default function CashGameLandingPage() {
           requests: arrayUnion(newRequest),
         });
 
-        toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado.' });
-        setJoinGameId('');
+        toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado. Você será redirecionado.' });
+        router.push(`/cash-game/${gameId}`);
+
       } else {
         toast({ variant: 'destructive', title: 'Sala não encontrada', description: 'Nenhuma sala encontrada com este ID. Verifique o código e tente novamente.' });
       }
@@ -181,7 +187,7 @@ export default function CashGameLandingPage() {
             <CardTitle className="flex items-center gap-2">
               <LogIn /> Entrar em uma Sala
             </CardTitle>
-            <CardDescription>Já tem um código? Insira-o abaixo para entrar em uma sala existente.</CardDescription>
+            <CardDescription>Já tem um código? Insira-o abaixo para entrar ou solicitar acesso a uma sala.</CardDescription>
           </CardHeader>
           <CardContent>
             <Input
@@ -195,7 +201,7 @@ export default function CashGameLandingPage() {
           </CardContent>
           <CardFooter>
             <Button variant="secondary" className="w-full" onClick={handleJoinGame} disabled={isJoining}>
-              {isJoining ? 'Enviando Pedido...' : 'Entrar na Sala'}
+              {isJoining ? 'Processando...' : 'Entrar ou Solicitar'}
             </Button>
           </CardFooter>
         </Card>
