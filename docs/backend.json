@@ -1,102 +1,278 @@
 {
-    "entities": {
-        "CashGame": {
-            "title": "Cash Game Session",
-            "description": "Represents a single session of a cash game, containing all players, chips, and settings.",
-            "type": "object",
-            "properties": {
-                "id": { "type": "string", "description": "Unique identifier for the game session." },
-                "name": { "type": "string", "description": "The name of the game session/room." },
-                "chips": { "type": "array", "items": { "$ref": "#/entities/CashGameChip" } },
-                "players": { "type": "array", "items": { "$ref": "#/entities/CashGamePlayer" } },
-                "cashedOutPlayers": { "type": "array", "items": { "$ref": "#/entities/CashedOutPlayer" } },
-                "positionsSet": { "type": "boolean" },
-                "dealerId": { "type": ["number", "null"] },
-                "createdAt": { "type": "string", "format": "date-time" }
-            },
-            "required": ["id", "name", "chips", "players", "cashedOutPlayers", "positionsSet", "createdAt"]
+  "entities": {
+    "Tournament": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Tournament",
+      "type": "object",
+      "description": "Represents a poker tournament.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the tournament."
         },
-        "CashGameChip": {
-            "title": "Cash Game Chip",
-            "description": "Defines a single type of chip used in the cash game.",
-            "type": "object",
-            "properties": {
-                "id": { "type": "number" },
-                "value": { "type": "number" },
-                "color": { "type": "string" },
-                "name": { "type": "string" }
-            },
-            "required": ["id", "value", "color", "name"]
+        "name": {
+          "type": "string",
+          "description": "Name of the tournament."
         },
-        "CashGamePlayer": {
-            "title": "Cash Game Player",
-            "description": "Represents a player currently at the table.",
-            "type": "object",
-            "properties": {
-                "id": { "type": "number" },
-                "name": { "type": "string" },
-                "transactions": { "type": "array", "items": { "$ref": "#/entities/PlayerTransaction" } },
-                "finalChipCounts": { "type": "object", "additionalProperties": { "type": "number" } },
-                "seat": { "type": "number" },
-                "card": { "$ref": "#/entities/Card" }
-            },
-            "required": ["id", "name", "transactions"]
+        "buyIn": {
+          "type": "number",
+          "description": "The buy-in amount for the tournament."
         },
-        "PlayerTransaction": {
-            "title": "Player Transaction",
-            "description": "A single financial transaction for a player (buy-in, rebuy).",
-            "type": "object",
-            "properties": {
-                "id": { "type": "number" },
-                "type": { "type": "string", "enum": ["buy-in", "rebuy", "add-on"] },
-                "amount": { "type": "number" },
-                "chips": { "type": "array", "items": { "$ref": "#/entities/ChipDistribution" } }
-            },
-            "required": ["id", "type", "amount", "chips"]
+        "startingStack": {
+          "type": "number",
+          "description": "The number of chips each player starts with."
         },
-        "ChipDistribution": {
-            "title": "Chip Distribution",
-            "description": "The count of a specific chip in a transaction.",
-            "type": "object",
-            "properties": {
-                "chipId": { "type": "number" },
-                "count": { "type": "number" }
-            },
-            "required": ["chipId", "count"]
+        "blindStructureId": {
+          "type": "string",
+          "description": "Reference to BlindStructure. (Relationship: Tournament 1:1 BlindStructure)"
         },
-        "CashedOutPlayer": {
-            "title": "Cashed Out Player",
-            "description": "Represents a player who has left the table.",
-            "type": "object",
-            "properties": {
-                "id": { "type": "number" },
-                "name": { "type": "string" },
-                "transactions": { "type": "array", "items": { "$ref": "#/entities/PlayerTransaction" } },
-                "cashedOutAt": { "type": "string", "format": "date-time" },
-                "amountReceived": { "type": "number" },
-                "chipCounts": { "type": "object", "additionalProperties": { "type": "number" } },
-                "totalInvested": { "type": "number" }
-            },
-            "required": ["id", "name", "transactions", "cashedOutAt", "amountReceived", "chipCounts", "totalInvested"]
+        "payoutStructureId": {
+          "type": "string",
+          "description": "Reference to PayoutStructure. (Relationship: Tournament 1:1 PayoutStructure)"
         },
-        "Card": {
-            "title": "Playing Card",
-            "description": "A standard playing card.",
-            "type": "object",
-            "properties": {
-                "suit": { "type": "string" },
-                "rank": { "type": "string" }
-            },
-            "required": ["suit", "rank"]
+        "currentRound": {
+          "type": "number",
+          "description": "The current round number of the Tournament"
         }
+      },
+      "required": [
+        "id",
+        "name",
+        "buyIn",
+        "startingStack",
+        "blindStructureId",
+        "payoutStructureId"
+      ]
     },
-    "auth": {
-        "providers": []
-    },
-    "firestore": {
-        "/cashGames/{gameId}": {
-            "schema": { "$ref": "#/entities/CashGame" },
-            "description": "Stores the state of a single cash game session."
+    "BlindStructure": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "BlindStructure",
+      "type": "object",
+      "description": "Defines the structure of blinds and antes for a tournament.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the blind structure."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the blind structure (e.g., 'Standard', 'Turbo')."
+        },
+        "rounds": {
+          "type": "array",
+          "description": "A list of blind levels.",
+          "items": {
+            "type": "string"
+          }
         }
+      },
+      "required": [
+        "id",
+        "name",
+        "rounds"
+      ]
+    },
+    "BlindLevel": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "BlindLevel",
+      "type": "object",
+      "description": "Represents a single blind level in the tournament.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the blind level."
+        },
+        "blindStructureId": {
+          "type": "string",
+          "description": "Reference to BlindStructure. (Relationship: BlindStructure 1:N BlindLevel)"
+        },
+        "roundNumber": {
+          "type": "number",
+          "description": "The number for each round (e.g., 1,2,3)"
+        },
+        "smallBlind": {
+          "type": "number",
+          "description": "The small blind amount."
+        },
+        "bigBlind": {
+          "type": "number",
+          "description": "The big blind amount."
+        },
+        "ante": {
+          "type": "number",
+          "description": "The ante amount."
+        },
+        "duration": {
+          "type": "number",
+          "description": "The duration of the blind level in minutes."
+        }
+      },
+      "required": [
+        "id",
+        "blindStructureId",
+        "roundNumber",
+        "smallBlind",
+        "bigBlind",
+        "ante",
+        "duration"
+      ]
+    },
+    "PayoutStructure": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PayoutStructure",
+      "type": "object",
+      "description": "Defines the payout structure for a tournament.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the payout structure."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the payout structure (e.g., 'Winner Takes All')."
+        },
+        "payouts": {
+          "type": "array",
+          "description": "An array of payout entries.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "payouts"
+      ]
+    },
+    "PayoutEntry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PayoutEntry",
+      "type": "object",
+      "description": "Represents a single payout entry (e.g., 1st place gets 100%).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the payout entry."
+        },
+        "payoutStructureId": {
+          "type": "string",
+          "description": "Reference to PayoutStructure. (Relationship: PayoutStructure 1:N PayoutEntry)"
+        },
+        "place": {
+          "type": "number",
+          "description": "The place that receives a payout (e.g., 1 for 1st place)."
+        },
+        "percentage": {
+          "type": "number",
+          "description": "The percentage of the prize pool awarded (e.g., 1.0 for 100%)."
+        }
+      },
+      "required": [
+        "id",
+        "payoutStructureId",
+        "place",
+        "percentage"
+      ]
     }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/tournaments/{tournamentId}",
+        "definition": {
+          "entityName": "Tournament",
+          "schema": {
+            "$ref": "#/backend/entities/Tournament"
+          },
+          "description": "Stores tournament information. Includes denormalized `ownerId` for authorization independence (if needed).",
+          "params": [
+            {
+              "name": "tournamentId",
+              "description": "Unique identifier for the tournament."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/blindStructures/{blindStructureId}",
+        "definition": {
+          "entityName": "BlindStructure",
+          "schema": {
+            "$ref": "#/backend/entities/BlindStructure"
+          },
+          "description": "Stores blind structure definitions.",
+          "params": [
+            {
+              "name": "blindStructureId",
+              "description": "Unique identifier for the blind structure."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/blindStructures/{blindStructureId}/blindLevels/{blindLevelId}",
+        "definition": {
+          "entityName": "BlindLevel",
+          "schema": {
+            "$ref": "#/backend/entities/BlindLevel"
+          },
+          "description": "Stores individual blind levels associated with a blind structure.",
+          "params": [
+            {
+              "name": "blindStructureId",
+              "description": "Unique identifier for the blind structure."
+            },
+            {
+              "name": "blindLevelId",
+              "description": "Unique identifier for the blind level."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/payoutStructures/{payoutStructureId}",
+        "definition": {
+          "entityName": "PayoutStructure",
+          "schema": {
+            "$ref": "#/backend/entities/PayoutStructure"
+          },
+          "description": "Stores payout structure definitions.",
+          "params": [
+            {
+              "name": "payoutStructureId",
+              "description": "Unique identifier for the payout structure."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/payoutStructures/{payoutStructureId}/payoutEntries/{payoutEntryId}",
+        "definition": {
+          "entityName": "PayoutEntry",
+          "schema": {
+            "$ref": "#/backend/entities/PayoutEntry"
+          },
+          "description": "Stores individual payout entries associated with a payout structure.",
+          "params": [
+            {
+              "name": "payoutStructureId",
+              "description": "Unique identifier for the payout structure."
+            },
+            {
+              "name": "payoutEntryId",
+              "description": "Unique identifier for the payout entry."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to manage poker tournaments, blind structures, payout structures, and related data efficiently. The structure is optimized for querying and managing tournaments and their associated configurations.  Each collection is designed for homogeneous security, ensuring that rules can be applied consistently across all documents within a collection.\n\n**Authorization Independence:**\n\n*   No explicit authorization is required at this level. The app assumes an administrative role that manages all the data. We can introduce an `ownerId` field to Tournament to limit to specific user.\n\n**QAPs Support:**\n\n*   The design segregates data into different collections based on entity type, ensuring that queries can be efficiently performed against each entity without mixing data with different access requirements."
+  }
 }

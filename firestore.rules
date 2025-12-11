@@ -1,10 +1,157 @@
+/**
+ * Core Philosophy: This ruleset establishes a "Public Read, Authenticated Write" model.
+ * All tournament data, including blind and payout structures, is publicly readable by
+ * any client to facilitate easy display within the application. However, all write
+ * operations (creating, updating, or deleting data) are restricted to authenticated
+ * users. This provides a secure baseline for a prototyping environment, preventing
+ * anonymous vandalism while allowing any signed-in user to act as an administrator,
+ * aligning with the initial app design which does not yet have a formal role system.
+ *
+ * Data Structure: The data is organized into top-level collections for primary
+ * entities: `tournaments`, `blindStructures`, and `payoutStructures`. Specific details
+ * like blind levels and payout entries are stored in subcollections under their
+ * respective parents (e.g., `/blindStructures/{id}/blindLevels`). This relational
+ * structure is simple and efficient for querying related data.
+ *
+ * Key Security Decisions:
+ * - Public Read Access: All data is considered public information for app users,
+ *   so `get` and `list` operations are permitted for everyone, including anonymous users.
+ * - Authenticated Writes: To prevent abuse, all write operations (`create`, `update`,
+ *   `delete`) across all collections require the user to be signed in.
+ * - Relational Integrity: For subcollections (`blindLevels`, `payoutEntries`), rules
+ *   enforce that the parent reference ID within a document cannot be changed after
+
+ *   creation, ensuring data relationships remain stable.
+ *
+ * Denormalization for Authorization: This ruleset does not currently rely on
+ * denormalized ownership fields (like an `ownerId` on a tournament). The authorization
+ * model is global (any signed-in user can write). If a user-specific ownership model
+ * is required in the future, fields like `ownerId` must be denormalized onto the
+ * `tournaments` documents to enable more granular, owner-based rules.
+ *
+ * Structural Segregation: Not applicable in this model, as all data is treated
+ * as public-read. There is no mix of private and public data within any single collection.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow anyone to read and write to the cashGames collection.
-    // This is suitable for a public app where no user authentication is required.
-    match /cashGames/{gameId} {
-      allow read, write: if true;
+
+    // --------------------------------------------------------------------
+    // Helper Functions
+    // --------------------------------------------------------------------
+
+    /**
+     * Returns true if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * On create, validates that the blind level's parent ID in its data
+     * matches the parent ID in the path.
+     */
+    function incomingDataMatchesPath_BlindLevel(blindStructureId) {
+      return request.resource.data.blindStructureId == blindStructureId;
+    }
+
+    /**
+     * On update, ensures the blind level's parent ID is immutable.
+     */
+    function parentIdIsImmutable_BlindLevel() {
+      return request.resource.data.blindStructureId == resource.data.blindStructureId;
+    }
+
+    /**
+     * On create, validates that the payout entry's parent ID in its data
+     * matches the parent ID in the path.
+     */
+    function incomingDataMatchesPath_PayoutEntry(payoutStructureId) {
+      return request.resource.data.payoutStructureId == payoutStructureId;
+    }
+
+    /**
+     * On update, ensures the payout entry's parent ID is immutable.
+     */
+    function parentIdIsImmutable_PayoutEntry() {
+      return request.resource.data.payoutStructureId == resource.data.payoutStructureId;
+    }
+
+
+    // --------------------------------------------------------------------
+    // Collection Rules
+    // --------------------------------------------------------------------
+
+    /**
+     * @description Manages poker tournament documents.
+     * @path /tournaments/{tournamentId}
+     * @allow (read) Any user, signed-in or not, can read a tournament document.
+     * @allow (write) Any signed-in user can create, update, or delete a tournament.
+     * @deny (write) An anonymous user attempts to create a tournament.
+     * @principle Public Read, Authenticated Write: Allows public data consumption while protecting data integrity by requiring authentication for any modification.
+     */
+    match /tournaments/{tournamentId} {
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Manages blind structure definitions for tournaments.
+     * @path /blindStructures/{blindStructureId}
+     * @allow (read) Any user can read a blind structure document.
+     * @allow (write) Any signed-in user can create, update, or delete a blind structure.
+     * @deny (write) An anonymous user attempts to update a blind structure.
+     * @principle Public Read, Authenticated Write: Allows public data consumption while protecting data integrity by requiring authentication for any modification.
+     */
+    match /blindStructures/{blindStructureId} {
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Manages individual blind levels within a blind structure.
+     * @path /blindStructures/{blindStructureId}/blindLevels/{blindLevelId}
+     * @allow (read) Any user can read the blind levels for any tournament structure.
+     * @allow (create) A signed-in user can create a blind level, but only if its internal `blindStructureId` matches the path.
+     * @deny (update) A signed-in user attempts to change the `blindStructureId` of an existing blind level.
+     * @principle Relational Integrity: Ensures that a subcollection document cannot be moved between parents after it has been created.
+     */
+    match /blindStructures/{blindStructureId}/blindLevels/{blindLevelId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && incomingDataMatchesPath_BlindLevel(blindStructureId);
+      allow update: if isSignedIn() && resource != null && parentIdIsImmutable_BlindLevel();
+      allow delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Manages payout structure definitions for tournaments.
+     * @path /payoutStructures/{payoutStructureId}
+     * @allow (read) Any user can read a payout structure document.
+     * @allow (write) Any signed-in user can create, update, or delete a payout structure.
+     * @deny (write) An anonymous user attempts to delete a payout structure.
+     * @principle Public Read, Authenticated Write: Allows public data consumption while protecting data integrity by requiring authentication for any modification.
+     */
+    match /payoutStructures/{payoutStructureId} {
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && resource != null;
+    }
+
+    /**
+     * @description Manages individual payout entries within a payout structure.
+     * @path /payoutStructures/{payoutStructureId}/payoutEntries/{payoutEntryId}
+     * @allow (read) Any user can read the payout entries for any tournament structure.
+     * @allow (create) A signed-in user can create a payout entry, but only if its internal `payoutStructureId` matches the path.
+     * @deny (update) A signed-in user attempts to change the `payoutStructureId` of an existing payout entry.
+     * @principle Relational Integrity: Ensures that a subcollection document cannot be moved between parents after it has been created.
+     */
+    match /payoutStructures/{payoutStructureId}/payoutEntries/{payoutEntryId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && incomingDataMatchesPath_PayoutEntry(payoutStructureId);
+      allow update: if isSignedIn() && resource != null && parentIdIsImmutable_PayoutEntry();
+      allow delete: if isSignedIn() && resource != null;
     }
   }
 }
