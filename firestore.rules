@@ -26,36 +26,31 @@ service cloud.firestore {
 
     // User Profiles
     match /users/{userId} {
-      // Any authenticated user can create their own profile document.
-      // This is crucial for the sign-up process.
       allow create: if isOwner(userId);
-      
-      // Users can only read their own profile. Admins can read any profile.
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
-      
-      // Users can update their own profile. Super admins can update any profile role.
       allow update: if isOwner(userId) || isSuperAdmin();
     }
 
     // Cash Games
     match /cashGames/{gameId} {
-      // Any signed-in user can read game data to spectate or join.
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-
-      // Only admins can create new games.
+      allow get, list: if isSignedIn();
       allow create: if isAdmin();
-
-      // Deleting a game is restricted to the owner or an admin.
       allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
 
-      // Updating a game has nuanced rules:
-      // - Any signed-in user can update the 'requests' array to ask to join.
-      // - Only the game owner or an admin can update other fields.
+      // Update Rules:
+      // - Any signed-in user can update 'requests' to join.
+      // - The designated dealer can update the 'handState' to run the game.
+      // - The game owner or an admin can update anything else.
       allow update: if isSignedIn() && 
-                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) || 
-                    (resource.data.ownerId == request.auth.uid || isAdmin()));
+                    (
+                      // Allow anyone to request to join
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']) ||
+                      // Allow the dealer to update the hand state
+                      (request.auth.uid == resource.data.dealerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handState'])) ||
+                      // Allow owner or admin to manage the game
+                      (resource.data.ownerId == request.auth.uid || isAdmin())
+                    );
     }
 
     // Tournaments (Read-only for now)
