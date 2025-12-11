@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Check, LogIn, PlusCircle, X, Lock } from 'lucide-react';
+import { Check, LogIn, UserPlus, X, Lock } from 'lucide-react';
 import type { JoinRequest } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
@@ -145,7 +145,7 @@ const PlayerActions: React.FC<PlayerActionsProps> = ({
                 onChange={(e) => setNewPlayerBuyIn(e.target.value)}
               />
               <Button onClick={handleAddManualPlayer} className="w-full md:w-auto">
-                <PlusCircle className="mr-2" />
+                <UserPlus className="mr-2" />
                 Adicionar
               </Button>
             </div>
