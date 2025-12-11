@@ -735,35 +735,34 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserPlus /> Adicionar Jogador
-                </CardTitle>
-                {!isAdmin && <CardDescription className="text-amber-500 flex items-center gap-2"><Lock size={16} />Apenas administradores podem adicionar jogadores.</CardDescription>}
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col md:flex-row gap-4">
-                  <Input
-                    placeholder="Nome do Jogador"
-                    value={newPlayerName}
-                    onChange={(e) => setNewPlayerName(e.target.value)}
-                    disabled={!isAdmin}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Valor do Buy-in (R$)"
-                    value={newPlayerBuyIn}
-                    onChange={(e) => setNewPlayerBuyIn(e.target.value)}
-                    disabled={!isAdmin}
-                  />
-                  <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto" disabled={!isAdmin}>
-                    <PlusCircle className="mr-2" />
-                    Adicionar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {isAdmin && (
+                <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                    <UserPlus /> Adicionar Jogador
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex flex-col md:flex-row gap-4">
+                    <Input
+                        placeholder="Nome do Jogador"
+                        value={newPlayerName}
+                        onChange={(e) => setNewPlayerName(e.target.value)}
+                    />
+                    <Input
+                        type="number"
+                        placeholder="Valor do Buy-in (R$)"
+                        value={newPlayerBuyIn}
+                        onChange={(e) => setNewPlayerBuyIn(e.target.value)}
+                    />
+                    <Button onClick={() => handleOpenDistributionModal('buy-in')} className="w-full md:w-auto">
+                        <PlusCircle className="mr-2" />
+                        Adicionar
+                    </Button>
+                    </div>
+                </CardContent>
+                </Card>
+            )}
 
             {positionsSet && (
               <Card>
@@ -1079,433 +1078,432 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette /> Fichas do Jogo
-                </CardTitle>
-                {!isAdmin && <CardDescription className="text-amber-500 flex items-center gap-2"><Lock size={16} />Apenas administradores podem gerenciar fichas.</CardDescription>}
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {sortedChips.map((chip) => (
-                    <div key={chip.id} className="flex items-center gap-2">
-                      <ChipIcon color={chip.color} />
-                      <Input
-                        type="text"
-                        value={chip.name}
-                        onChange={(e) => {
-                          const updatedChips = chips.map((c) =>
-                            c.id === chip.id ? { ...c, name: e.target.value } : c
-                          );
-                          updateGame({ chips: updatedChips });
-                        }}
-                        className="w-24 flex-1"
-                        disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
-                      />
-                      <div className="flex items-center">
-                        <span className="mr-2 text-sm">R$</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={chip.value}
-                          onChange={(e) => {
-                            const updatedChips = chips.map((c) =>
-                              c.id === chip.id ? { ...c, value: parseFloat(e.target.value) || 0 } : c
-                            );
-                            updateGame({ chips: updatedChips });
-                          }}
-                          className="w-20"
-                          disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
-                        onClick={() => handleRemoveChip(chip.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500/80" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-              <CardFooter className="flex-col gap-2">
-                <Dialog open={isAddChipOpen} onOpenChange={setIsAddChipOpen}>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
-                    >
-                      Adicionar Ficha
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Adicionar Nova Ficha</DialogTitle>
-                      <DialogDescription>Defina as propriedades da nova ficha para o jogo.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="chip-name" className="text-right">
-                          Nome
-                        </Label>
-                        <Input
-                          id="chip-name"
-                          value={newChip.name}
-                          onChange={(e) => setNewChip({ ...newChip, name: e.target.value })}
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="chip-value" className="text-right">
-                          Valor (R$)
-                        </Label>
-                        <Input
-                          id="chip-value"
-                          type="number"
-                          value={newChip.value}
-                          onChange={(e) => setNewChip({ ...newChip, value: e.target.value })}
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="chip-color" className="text-right">
-                          Cor
-                        </Label>
-                        <Input
-                          id="chip-color"
-                          type="color"
-                          value={newChip.color}
-                          onChange={(e) => setNewChip({ ...newChip, color: e.target.value })}
-                          className="col-span-3 h-10 p-1"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button onClick={handleAddChip}>Salvar Ficha</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <Button
-                  variant="ghost"
-                  className="w-full"
-                  onClick={handleResetChips}
-                  disabled={!isAdmin || players.length > 0 || cashedOutPlayers.length > 0}
-                >
-                  Resetar Fichas
-                </Button>
-              </CardFooter>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calculator /> Acerto de Contas
-                </CardTitle>
-                {!isAdmin ? (
-                   <CardDescription className="text-amber-500 flex items-center gap-2"><Lock size={16} />Apenas administradores podem iniciar o acerto de contas.</CardDescription>
-                ) : (
-                  <CardDescription>
-                    Ao final do jogo, insira a contagem de fichas de cada jogador para calcular os resultados.
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground text-center">
-                  Clique no botão abaixo para iniciar o acerto de contas.
-                </p>
-              </CardContent>
-              <CardFooter>
-                <Dialog open={isSettlementOpen} onOpenChange={setIsSettlementOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="w-full" disabled={!isAdmin || players.length === 0}>
-                      Iniciar Acerto de Contas
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-[90vw] md:max-w-4xl lg:max-w-6xl h-[90vh]">
-                    <DialogHeader>
-                      <DialogTitle>Acerto de Contas Final</DialogTitle>
-                      <DialogDescription>
-                        Insira a contagem final de fichas para cada jogador, gorjetas e rake. O sistema calculará os
-                        valores.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="overflow-y-auto pr-4 -mr-4 h-full">
-                      <div className="p-4 rounded-md bg-muted/50 border border-border mb-6">
-                        <h3 className="text-lg font-bold text-foreground mb-2">
-                          Total de Fichas em Jogo (Restantes)
-                        </h3>
-                        <div className="flex flex-wrap gap-x-6 gap-y-2">
-                          {settlementChipsInPlay.map(({ chip, count }) => (
+            {isAdmin && (
+                <>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                        <Palette /> Fichas do Jogo
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                        {sortedChips.map((chip) => (
                             <div key={chip.id} className="flex items-center gap-2">
-                              <ChipIcon color={chip.color} />
-                              <span className="font-bold">{chip.name}:</span>
-                              <span className="font-mono text-muted-foreground">{count} fichas</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <h3 className="text-xl font-bold mb-2">Jogadores</h3>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[150px]">Jogador</TableHead>
-                            {sortedChips.map((chip) => (
-                              <TableHead key={chip.id} className="text-center w-[100px]">
-                                <div className="flex items-center justify-center gap-2">
-                                  <ChipIcon color={chip.color} />
-                                  <span>{chip.value.toFixed(2)}</span>
-                                </div>
-                              </TableHead>
-                            ))}
-                            <TableHead className="text-right">Investido (R$)</TableHead>
-                            <TableHead className="text-right font-bold text-foreground">
-                              Valor Contado (R$)
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {players.map((player) => {
-                            const { totalInvested, finalValue } = getPlayerSettlementData(player);
-                            const pFinalChips = new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
-
-                            return (
-                              <TableRow key={player.id}>
-                                <TableCell className="font-medium">{player.name}</TableCell>
-                                {sortedChips.map((chip) => (
-                                  <TableCell key={chip.id}>
-                                    <Input
-                                      type="number"
-                                      className="w-16 text-center font-mono mx-auto"
-                                      min="0"
-                                      value={pFinalChips.get(chip.id) || ''}
-                                      onChange={(e) =>
-                                        handlePlayerChipCountChange(player.id, chip.id, parseInt(e.target.value) || 0)
-                                      }
-                                    />
-                                  </TableCell>
-                                ))}
-                                <TableCell className="text-right font-mono">
-                                  {totalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </TableCell>
-                                <TableCell className="text-right font-mono font-bold text-foreground">
-                                  {finalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-
-                      <Separator className="my-6" />
-
-                      <div className="grid md:grid-cols-2 gap-8">
-                        <div>
-                          <h3 className="text-xl font-bold mb-2">Gorjeta do Croupier</h3>
-                          <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
-                            {sortedChips.map((chip) => (
-                              <div key={`tips-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
-                                <Label
-                                  htmlFor={`tips-chip-${chip.id}`}
-                                  className="text-sm flex items-center gap-2"
-                                >
-                                  <ChipIcon color={chip.color} />
-                                  Fichas de {chip.value.toLocaleString('pt-BR', {
-                                    style: 'currency',
-                                    currency: 'BRL',
-                                  })}
-                                </Label>
+                            <ChipIcon color={chip.color} />
+                            <Input
+                                type="text"
+                                value={chip.name}
+                                onChange={(e) => {
+                                const updatedChips = chips.map((c) =>
+                                    c.id === chip.id ? { ...c, name: e.target.value } : c
+                                );
+                                updateGame({ chips: updatedChips });
+                                }}
+                                className="w-24 flex-1"
+                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                            />
+                            <div className="flex items-center">
+                                <span className="mr-2 text-sm">R$</span>
                                 <Input
-                                  id={`tips-chip-${chip.id}`}
-                                  type="number"
-                                  min="0"
-                                  placeholder="Qtd."
-                                  className="font-mono text-center"
-                                  value={croupierTipsChipCounts.get(chip.id) || ''}
-                                  onChange={(e) =>
-                                    handleTipRakeChipCountChange('tips', chip.id, parseInt(e.target.value) || 0)
-                                  }
-                                />
-                              </div>
-                            ))}
-                            <Separator className="my-2" />
-                            <div className="flex justify-between items-center font-bold">
-                              <span>Total Gorjeta:</span>
-                              <span>
-                                {croupierTipsValue.toLocaleString('pt-BR', {
-                                  style: 'currency',
-                                  currency: 'BRL',
-                                })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-bold mb-2">Rake da Casa</h3>
-                          <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
-                            {sortedChips.map((chip) => (
-                              <div key={`rake-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
-                                <Label
-                                  htmlFor={`rake-chip-${chip.id}`}
-                                  className="text-sm flex items-center gap-2"
-                                >
-                                  <ChipIcon color={chip.color} />
-                                  Fichas de {chip.value.toLocaleString('pt-BR', {
-                                    style: 'currency',
-                                    currency: 'BRL',
-                                  })}
-                                </Label>
-                                <Input
-                                  id={`rake-chip-${chip.id}`}
-                                  type="number"
-                                  min="0"
-                                  placeholder="Qtd."
-                                  className="font-mono text-center"
-                                  value={rakeChipCounts.get(chip.id) || ''}
-                                  onChange={(e) =>
-                                    handleTipRakeChipCountChange('rake', chip.id, parseInt(e.target.value) || 0)
-                                  }
-                                />
-                              </div>
-                            ))}
-                            <Separator className="my-2" />
-                            <div className="flex justify-between items-center font-bold">
-                              <span>Total Rake:</span>
-                              <span>
-                                {rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Separator className="my-6" />
-
-                      {Math.abs(settlementDifference) < 0.01 ? (
-                        <div className="p-4 rounded-md bg-green-900/50 border border-green-500">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="text-green-400" />
-                            <h3 className="text-lg font-bold text-green-300">Contas Batem!</h3>
-                          </div>
-                          <p className="text-green-400/80 mt-1">
-                            O valor total (fichas + gorjeta + rake) corresponde ao valor total que entrou na mesa.
-                          </p>
-                          <div className="mt-4">
-                            <h4 className="font-bold mb-2 text-green-300">Pagamentos Finais:</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
-                              <div>
-                                <p className="font-bold border-b pb-1 mb-2">Valor a Receber</p>
-                                <ul className="space-y-1 list-disc list-inside">
-                                  {players.map((player) => {
-                                    const { finalValue } = getPlayerSettlementData(player);
-                                    return (
-                                      <li key={player.id}>
-                                        {player.name} recebe{' '}
-                                        <span className="font-bold text-green-400">
-                                          {finalValue.toLocaleString('pt-BR', {
-                                            style: 'currency',
-                                            currency: 'BRL',
-                                          })}
-                                        </span>
-                                        .
-                                      </li>
+                                type="number"
+                                step="0.01"
+                                value={chip.value}
+                                onChange={(e) => {
+                                    const updatedChips = chips.map((c) =>
+                                    c.id === chip.id ? { ...c, value: parseFloat(e.target.value) || 0 } : c
                                     );
-                                  })}
-                                </ul>
-                              </div>
-                              <div>
-                                <p className="font-bold border-b pb-1 mb-2">Lucro / Prejuízo</p>
-                                <ul className="space-y-1 list-disc list-inside">
-                                  {players.map((player) => {
-                                    const { balance } = getPlayerSettlementData(player);
-                                    return (
-                                      <li key={player.id}>
-                                        {player.name}:{' '}
-                                        <span
-                                          className={cn(
-                                            'font-bold',
-                                            balance >= 0 ? 'text-green-400' : 'text-red-400'
-                                          )}
-                                        >
-                                          {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                        </span>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              </div>
+                                    updateGame({ chips: updatedChips });
+                                }}
+                                className="w-20"
+                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                                />
                             </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-4 rounded-md bg-red-900/50 border border-red-500">
-                          <div className="flex items-center gap-2">
-                            <AlertCircle className="text-red-400" />
-                            <h3 className="text-lg font-bold text-red-300">Erro na Contagem!</h3>
-                          </div>
-                          <p className="text-red-400/80 mt-1">
-                            A soma das fichas, gorjeta e rake não corresponde ao total de buy-ins. Verifique a contagem
-                            de fichas de cada jogador.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <DialogFooter className="mt-4 gap-2 sm:gap-0">
-                      <div className="flex-1 text-center md:text-right font-mono bg-muted p-2 rounded-md text-xs">
-                        TOTAL ENTRADO:{' '}
-                        <span className="font-bold">
-                          {totalSessionBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
-                        <br />
-                        TOTAL CONTADO:{' '}
-                        <span className="font-bold">
-                          {totalSettlementValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>{' '}
-                        (+
-                        {croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Gorjeta)
-                        (+{rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
-                        <br />
-                        Diferença:{' '}
-                        <span
-                          className={cn(
-                            'font-bold',
-                            Math.abs(settlementDifference) >= 0.01 ? 'text-destructive' : 'text-green-400'
-                          )}
-                        >
-                          {settlementDifference.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
-                      </div>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="destructive">Resetar e Finalizar Sessão</Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-md">
-                          <DialogHeader>
-                            <DialogTitle>Confirmar Finalização</DialogTitle>
-                            <DialogDescription>
-                              Tem certeza que deseja finalizar a sessão? A sala e todos os seus dados serão apagados
-                              permanentemente. Esta ação não pode ser desfeita.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <DialogFooter>
-                            <DialogClose asChild>
-                              <Button variant="outline">Cancelar</Button>
-                            </DialogClose>
-                            <Button variant="destructive" onClick={resetGame}>
-                              Sim, Finalizar
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                                onClick={() => handleRemoveChip(chip.id)}
+                            >
+                                <Trash2 className="h-4 w-4 text-red-500/80" />
                             </Button>
-                          </DialogFooter>
+                            </div>
+                        ))}
+                        </div>
+                    </CardContent>
+                    <CardFooter className="flex-col gap-2">
+                        <Dialog open={isAddChipOpen} onOpenChange={setIsAddChipOpen}>
+                        <DialogTrigger asChild>
+                            <Button
+                            variant="outline"
+                            className="w-full"
+                            disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                            >
+                            Adicionar Ficha
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                            <DialogTitle>Adicionar Nova Ficha</DialogTitle>
+                            <DialogDescription>Defina as propriedades da nova ficha para o jogo.</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="chip-name" className="text-right">
+                                Nome
+                                </Label>
+                                <Input
+                                id="chip-name"
+                                value={newChip.name}
+                                onChange={(e) => setNewChip({ ...newChip, name: e.target.value })}
+                                className="col-span-3"
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="chip-value" className="text-right">
+                                Valor (R$)
+                                </Label>
+                                <Input
+                                id="chip-value"
+                                type="number"
+                                value={newChip.value}
+                                onChange={(e) => setNewChip({ ...newChip, value: e.target.value })}
+                                className="col-span-3"
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <Label htmlFor="chip-color" className="text-right">
+                                Cor
+                                </Label>
+                                <Input
+                                id="chip-color"
+                                type="color"
+                                value={newChip.color}
+                                onChange={(e) => setNewChip({ ...newChip, color: e.target.value })}
+                                className="col-span-3 h-10 p-1"
+                                />
+                            </div>
+                            </div>
+                            <DialogFooter>
+                            <Button onClick={handleAddChip}>Salvar Ficha</Button>
+                            </DialogFooter>
                         </DialogContent>
-                      </Dialog>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </CardFooter>
-            </Card>
+                        </Dialog>
+                        <Button
+                        variant="ghost"
+                        className="w-full"
+                        onClick={handleResetChips}
+                        disabled={players.length > 0 || cashedOutPlayers.length > 0}
+                        >
+                        Resetar Fichas
+                        </Button>
+                    </CardFooter>
+                </Card>
+
+                <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                    <Calculator /> Acerto de Contas
+                    </CardTitle>
+                    <CardDescription>
+                        Ao final do jogo, insira a contagem de fichas de cada jogador para calcular os resultados.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground text-center">
+                    Clique no botão abaixo para iniciar o acerto de contas.
+                    </p>
+                </CardContent>
+                <CardFooter>
+                    <Dialog open={isSettlementOpen} onOpenChange={setIsSettlementOpen}>
+                    <DialogTrigger asChild>
+                        <Button className="w-full" disabled={players.length === 0}>
+                        Iniciar Acerto de Contas
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[90vw] md:max-w-4xl lg:max-w-6xl h-[90vh]">
+                        <DialogHeader>
+                        <DialogTitle>Acerto de Contas Final</DialogTitle>
+                        <DialogDescription>
+                            Insira a contagem final de fichas para cada jogador, gorjetas e rake. O sistema calculará os
+                            valores.
+                        </DialogDescription>
+                        </DialogHeader>
+                        <div className="overflow-y-auto pr-4 -mr-4 h-full">
+                        <div className="p-4 rounded-md bg-muted/50 border border-border mb-6">
+                            <h3 className="text-lg font-bold text-foreground mb-2">
+                            Total de Fichas em Jogo (Restantes)
+                            </h3>
+                            <div className="flex flex-wrap gap-x-6 gap-y-2">
+                            {settlementChipsInPlay.map(({ chip, count }) => (
+                                <div key={chip.id} className="flex items-center gap-2">
+                                <ChipIcon color={chip.color} />
+                                <span className="font-bold">{chip.name}:</span>
+                                <span className="font-mono text-muted-foreground">{count} fichas</span>
+                                </div>
+                            ))}
+                            </div>
+                        </div>
+
+                        <h3 className="text-xl font-bold mb-2">Jogadores</h3>
+                        <Table>
+                            <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[150px]">Jogador</TableHead>
+                                {sortedChips.map((chip) => (
+                                <TableHead key={chip.id} className="text-center w-[100px]">
+                                    <div className="flex items-center justify-center gap-2">
+                                    <ChipIcon color={chip.color} />
+                                    <span>{chip.value.toFixed(2)}</span>
+                                    </div>
+                                </TableHead>
+                                ))}
+                                <TableHead className="text-right">Investido (R$)</TableHead>
+                                <TableHead className="text-right font-bold text-foreground">
+                                Valor Contado (R$)
+                                </TableHead>
+                            </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                            {players.map((player) => {
+                                const { totalInvested, finalValue } = getPlayerSettlementData(player);
+                                const pFinalChips = new Map(Object.entries(player.finalChipCounts).map(([k,v]) => [parseInt(k),v]));
+
+                                return (
+                                <TableRow key={player.id}>
+                                    <TableCell className="font-medium">{player.name}</TableCell>
+                                    {sortedChips.map((chip) => (
+                                    <TableCell key={chip.id}>
+                                        <Input
+                                        type="number"
+                                        className="w-16 text-center font-mono mx-auto"
+                                        min="0"
+                                        value={pFinalChips.get(chip.id) || ''}
+                                        onChange={(e) =>
+                                            handlePlayerChipCountChange(player.id, chip.id, parseInt(e.target.value) || 0)
+                                        }
+                                        />
+                                    </TableCell>
+                                    ))}
+                                    <TableCell className="text-right font-mono">
+                                    {totalInvested.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono font-bold text-foreground">
+                                    {finalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </TableCell>
+                                </TableRow>
+                                );
+                            })}
+                            </TableBody>
+                        </Table>
+
+                        <Separator className="my-6" />
+
+                        <div className="grid md:grid-cols-2 gap-8">
+                            <div>
+                            <h3 className="text-xl font-bold mb-2">Gorjeta do Croupier</h3>
+                            <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                                {sortedChips.map((chip) => (
+                                <div key={`tips-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
+                                    <Label
+                                    htmlFor={`tips-chip-${chip.id}`}
+                                    className="text-sm flex items-center gap-2"
+                                    >
+                                    <ChipIcon color={chip.color} />
+                                    Fichas de {chip.value.toLocaleString('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL',
+                                    })}
+                                    </Label>
+                                    <Input
+                                    id={`tips-chip-${chip.id}`}
+                                    type="number"
+                                    min="0"
+                                    placeholder="Qtd."
+                                    className="font-mono text-center"
+                                    value={croupierTipsChipCounts.get(chip.id) || ''}
+                                    onChange={(e) =>
+                                        handleTipRakeChipCountChange('tips', chip.id, parseInt(e.target.value) || 0)
+                                    }
+                                    />
+                                </div>
+                                ))}
+                                <Separator className="my-2" />
+                                <div className="flex justify-between items-center font-bold">
+                                <span>Total Gorjeta:</span>
+                                <span>
+                                    {croupierTipsValue.toLocaleString('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL',
+                                    })}
+                                </span>
+                                </div>
+                            </div>
+                            </div>
+                            <div>
+                            <h3 className="text-xl font-bold mb-2">Rake da Casa</h3>
+                            <div className="space-y-2 p-4 border rounded-lg bg-muted/30">
+                                {sortedChips.map((chip) => (
+                                <div key={`rake-${chip.id}`} className="grid grid-cols-2 items-center gap-2">
+                                    <Label
+                                    htmlFor={`rake-chip-${chip.id}`}
+                                    className="text-sm flex items-center gap-2"
+                                    >
+                                    <ChipIcon color={chip.color} />
+                                    Fichas de {chip.value.toLocaleString('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL',
+                                    })}
+                                    </Label>
+                                    <Input
+                                    id={`rake-chip-${chip.id}`}
+                                    type="number"
+                                    min="0"
+                                    placeholder="Qtd."
+                                    className="font-mono text-center"
+                                    value={rakeChipCounts.get(chip.id) || ''}
+                                    onChange={(e) =>
+                                        handleTipRakeChipCountChange('rake', chip.id, parseInt(e.target.value) || 0)
+                                    }
+                                    />
+                                </div>
+                                ))}
+                                <Separator className="my-2" />
+                                <div className="flex justify-between items-center font-bold">
+                                <span>Total Rake:</span>
+                                <span>
+                                    {rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+
+                        <Separator className="my-6" />
+
+                        {Math.abs(settlementDifference) < 0.01 ? (
+                            <div className="p-4 rounded-md bg-green-900/50 border border-green-500">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="text-green-400" />
+                                <h3 className="text-lg font-bold text-green-300">Contas Batem!</h3>
+                            </div>
+                            <p className="text-green-400/80 mt-1">
+                                O valor total (fichas + gorjeta + rake) corresponde ao valor total que entrou na mesa.
+                            </p>
+                            <div className="mt-4">
+                                <h4 className="font-bold mb-2 text-green-300">Pagamentos Finais:</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                                <div>
+                                    <p className="font-bold border-b pb-1 mb-2">Valor a Receber</p>
+                                    <ul className="space-y-1 list-disc list-inside">
+                                    {players.map((player) => {
+                                        const { finalValue } = getPlayerSettlementData(player);
+                                        return (
+                                        <li key={player.id}>
+                                            {player.name} recebe{' '}
+                                            <span className="font-bold text-green-400">
+                                            {finalValue.toLocaleString('pt-BR', {
+                                                style: 'currency',
+                                                currency: 'BRL',
+                                            })}
+                                            </span>
+                                            .
+                                        </li>
+                                        );
+                                    })}
+                                    </ul>
+                                </div>
+                                <div>
+                                    <p className="font-bold border-b pb-1 mb-2">Lucro / Prejuízo</p>
+                                    <ul className="space-y-1 list-disc list-inside">
+                                    {players.map((player) => {
+                                        const { balance } = getPlayerSettlementData(player);
+                                        return (
+                                        <li key={player.id}>
+                                            {player.name}:{' '}
+                                            <span
+                                            className={cn(
+                                                'font-bold',
+                                                balance >= 0 ? 'text-green-400' : 'text-red-400'
+                                            )}
+                                            >
+                                            {balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                            </span>
+                                        </li>
+                                        );
+                                    })}
+                                    </ul>
+                                </div>
+                                </div>
+                            </div>
+                            </div>
+                        ) : (
+                            <div className="p-4 rounded-md bg-red-900/50 border border-red-500">
+                            <div className="flex items-center gap-2">
+                                <AlertCircle className="text-red-400" />
+                                <h3 className="text-lg font-bold text-red-300">Erro na Contagem!</h3>
+                            </div>
+                            <p className="text-red-400/80 mt-1">
+                                A soma das fichas, gorjeta e rake não corresponde ao total de buy-ins. Verifique a contagem
+                                de fichas de cada jogador.
+                            </p>
+                            </div>
+                        )}
+                        </div>
+                        <DialogFooter className="mt-4 gap-2 sm:gap-0">
+                        <div className="flex-1 text-center md:text-right font-mono bg-muted p-2 rounded-md text-xs">
+                            TOTAL ENTRADO:{' '}
+                            <span className="font-bold">
+                            {totalSessionBuyIn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                            <br />
+                            TOTAL CONTADO:{' '}
+                            <span className="font-bold">
+                            {totalSettlementValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>{' '}
+                            (+
+                            {croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Gorjeta)
+                            (+{rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
+                            <br />
+                            Diferença:{' '}
+                            <span
+                            className={cn(
+                                'font-bold',
+                                Math.abs(settlementDifference) >= 0.01 ? 'text-destructive' : 'text-green-400'
+                            )}
+                            >
+                            {settlementDifference.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                        </div>
+                        <Dialog>
+                            <DialogTrigger asChild>
+                            <Button variant="destructive">Resetar e Finalizar Sessão</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Confirmar Finalização</DialogTitle>
+                                <DialogDescription>
+                                Tem certeza que deseja finalizar a sessão? A sala e todos os seus dados serão apagados
+                                permanentemente. Esta ação não pode ser desfeita.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                                <DialogClose asChild>
+                                <Button variant="outline">Cancelar</Button>
+                                </DialogClose>
+                                <Button variant="destructive" onClick={resetGame}>
+                                Sim, Finalizar
+                                </Button>
+                            </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                        </DialogFooter>
+                    </DialogContent>
+                    </Dialog>
+                </CardFooter>
+                </Card>
+                </>
+            )}
           </div>
         </div>
       </div>
