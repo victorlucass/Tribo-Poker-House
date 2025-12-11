@@ -1,45 +1,140 @@
+/**
+ * @file firestore.rules
+ * @description Security rules for a Texas Hold'em poker tournament management application.
+ *
+ * ## Core Philosophy
+ * This ruleset establishes a clear security boundary between publicly accessible tournament data and private user-specific data. All global tournament-related information (tournaments, timers, prize pools) is publicly readable to allow any user or client to view ongoing or past events. However, write access to this public data is currently restricted, pending schema updates to include ownership information. User-specific data is strictly locked down, accessible only by the owning user.
+ *
+ * ## Data Structure
+ * The data is organized into several top-level collections:
+ * - `/tournaments`: Publicly readable tournament information.
+ * - `/timer_settings`: Publicly readable timer configurations. Contains a `blind_levels` subcollection.
+ * - `/prize_pools`: Publicly readable prize and payout details.
+ * - `/users`: Private documents for each user, secured by user ID.
+ *
+ * ## Key Security Decisions
+ * - **Public Read-Only Data**: Collections like `/tournaments` are public for read operations (`get`, `list`) but writes are disabled. This is a secure default because the data models lack an `ownerId` or `creatorId` field, making it impossible to verify who is authorized to modify a document. A TODO comment guides the developer to add this field to enable writes.
+ * - **Strict User Ownership**: The `/users/{userId}` path is governed by a strict ownership model. Only the authenticated user matching the `{userId}` wildcard can read, create, update, or delete their own document.
+ * - **No User Enumeration**: Listing documents in the top-level `/users` collection is explicitly disallowed to protect user privacy and prevent data scraping.
+ *
+ * ## Denormalization for Authorization
+ * To create simple, performant, and secure rules, it is critical that any document that requires owner-only write access contains a denormalized ownership field (e.g., `creatorId: "user-abc"`). This ruleset anticipates this pattern for collections like `/tournaments` and will block writes until such a field is present in the schema, thus avoiding slow and costly `get()` calls to other documents for authorization.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // --------------------------------
+    // Helper Functions
+    // --------------------------------
+
+    /**
+     * Checks if a user is authenticated.
+     */
     function isSignedIn() {
       return request.auth != null;
     }
 
+    /**
+     * Validates if the requesting user is the owner of the document based on the path's userId.
+     */
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-    
-    function isRoot() {
-      let userData = getUserData(request.auth.uid);
-      // Check for nickname instead of email for the root user
-      return userData.role == 'root' || userData.nickname == 'victorlucas.ao';
+    /**
+     * Checks if the document being accessed already exists.
+     * Crucial for safe update and delete operations.
+     */
+    function isExistingDoc() {
+      return resource != null;
     }
 
-    function isAdmin() {
-      let userRole = getUserData(request.auth.uid).role;
-      return userRole == 'admin' || isRoot();
+    /**
+     * Combines ownership and existence checks for update/delete operations.
+     */
+    function isOwnerOfExistingDoc(userId) {
+      return isOwner(userId) && isExistingDoc();
     }
 
+    /**
+     * @description Rule set for the 'tournaments' collection.
+     * @path /tournaments/{tournamentId}
+     * @allow (get) Any user, signed in or not, can read a specific tournament.
+     * @deny (create) Any user attempting to create a tournament will be denied because ownership cannot be verified.
+     * @principle Implements a "Public Read with Owner-Only Writes" pattern, but write access is currently blocked pending a schema update.
+     */
+    match /tournaments/{tournamentId} {
+      allow get, list: if true;
+
+      // CRITICAL: Cannot implement owner-only writes. The 'Tournament' entity is missing an 'ownerId' or 'creatorId' field.
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field. e.g., `request.resource.data.ownerId == request.auth.uid;`
+      allow update: if false; // TODO: Add owner validation. e.g., `isOwner(resource.data.ownerId);`
+      allow delete: if false; // TODO: Add owner validation. e.g., `isOwner(resource.data.ownerId);`
+    }
+
+    /**
+     * @description Rule set for 'timer_settings' and its nested 'blind_levels' subcollection.
+     * @path /timer_settings/{timerSettingsId}
+     * @allow (get) Any user, signed in or not, can read timer settings.
+     * @deny (create) Any user attempting to create timer settings will be denied.
+     * @principle Implements a "Public Read with Owner-Only Writes" pattern, but write access is currently blocked pending a schema update.
+     */
+    match /timer_settings/{timerSettingsId} {
+      allow get, list: if true;
+
+      // CRITICAL: Cannot implement owner-only writes. The 'TimerSettings' entity is missing an 'ownerId' or 'creatorId' field.
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation.
+      allow delete: if false; // TODO: Add owner validation.
+
+      /**
+       * @description Rule set for the nested 'blind_levels' subcollection.
+       * @path /timer_settings/{timerSettingsId}/blind_levels/{blindLevelId}
+       * @allow (list) Any user, signed in or not, can list blind levels for a given timer setting.
+       * @deny (create) Any user attempting to create a blind level will be denied.
+       * @principle Inherits the public-read, secure-write-disabled model from its parent collection.
+       */
+      match /blind_levels/{blindLevelId} {
+        allow get, list: if true;
+
+        // CRITICAL: Cannot implement owner-only writes. The 'BlindLevel' entity is missing an 'ownerId' or 'creatorId' field.
+        allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+        allow update: if false; // TODO: Add owner validation.
+        allow delete: if false; // TODO: Add owner validation.
+      }
+    }
+
+    /**
+     * @description Rule set for the 'prize_pools' collection.
+     * @path /prize_pools/{prizePoolId}
+     * @allow (get) Any user, signed in or not, can view prize pool information.
+     * @deny (create) Any user attempting to create a prize pool will be denied.
+     * @principle Implements a "Public Read with Owner-Only Writes" pattern, but write access is currently blocked pending a schema update.
+     */
+    match /prize_pools/{prizePoolId} {
+      allow get, list: if true;
+
+      // CRITICAL: Cannot implement owner-only writes. The 'PrizePool' entity is missing an 'ownerId' or 'creatorId' field.
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation.
+      allow delete: if false; // TODO: Add owner validation.
+    }
+
+    /**
+     * @description Rule set for user-specific data.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user can create their own user document (e.g., on sign-up). `request.auth.uid` must match `{userId}`.
+     * @deny (get) A user trying to read another user's document.
+     * @deny (list) Any user trying to list all documents in the `/users` collection.
+     * @principle Restricts all access to a user's own data tree, enforcing strict data privacy and ownership.
+     */
     match /users/{userId} {
-      allow read: if isSignedIn();
-      // Allow user to create their own profile document via a backend function
-      allow create: if request.resource.data.uid == request.auth.uid;
-      // Root can edit any user. Admins/players can only edit their own profile.
-      allow update: if isRoot() || isOwner(userId);
-      // Only root can delete users, but not the root user itself.
-      allow delete: if isRoot() && request.auth.uid != userId; 
-    }
-
-    match /cashGames/{gameId} {
-      allow read: if isSignedIn();
-      allow create: if isAdmin(); // Only admins can create a game
-      allow update: if isAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']);
-      allow delete: if isAdmin();
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isOwnerOfExistingDoc(userId);
+      allow delete: if isOwnerOfExistingDoc(userId);
     }
   }
 }

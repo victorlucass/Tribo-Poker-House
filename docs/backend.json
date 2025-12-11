@@ -1,11 +1,10 @@
-
 {
   "entities": {
     "Tournament": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Tournament",
       "type": "object",
-      "description": "Represents a poker tournament.",
+      "description": "Represents a Texas Hold'em poker tournament.",
       "properties": {
         "id": {
           "type": "string",
@@ -19,49 +18,53 @@
           "type": "number",
           "description": "The buy-in amount for the tournament."
         },
-        "startingStack": {
-          "type": "number",
-          "description": "The number of chips each player starts with."
-        },
-        "blindStructureId": {
+        "startDate": {
           "type": "string",
-          "description": "Reference to BlindStructure. (Relationship: Tournament 1:1 BlindStructure)"
+          "description": "The start date and time of the tournament.",
+          "format": "date-time"
         },
-        "payoutStructureId": {
+        "timerSettingsId": {
           "type": "string",
-          "description": "Reference to PayoutStructure. (Relationship: Tournament 1:1 PayoutStructure)"
-        },
-        "currentRound": {
-          "type": "number",
-          "description": "The current round number of the Tournament"
+          "description": "Reference to TimerSettings. (Relationship: Tournament 1:1 TimerSettings)"
         }
       },
       "required": [
         "id",
         "name",
         "buyIn",
-        "startingStack",
-        "blindStructureId",
-        "payoutStructureId"
+        "startDate",
+        "timerSettingsId"
       ]
     },
-    "BlindStructure": {
+    "TimerSettings": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "BlindStructure",
+      "title": "TimerSettings",
       "type": "object",
-      "description": "Defines the structure of blinds and antes for a tournament.",
+      "description": "Settings for the tournament timer, including blind levels and ante.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the blind structure."
+          "description": "Unique identifier for the timer settings."
         },
-        "name": {
-          "type": "string",
-          "description": "Name of the blind structure (e.g., 'Standard', 'Turbo')."
+        "roundLength": {
+          "type": "number",
+          "description": "The length of each round in minutes."
         },
-        "rounds": {
+        "startingBlindSmall": {
+          "type": "number",
+          "description": "The starting small blind amount."
+        },
+        "startingBlindBig": {
+          "type": "number",
+          "description": "The starting big blind amount."
+        },
+        "ante": {
+          "type": "number",
+          "description": "The initial ante amount."
+        },
+        "blindLevels": {
           "type": "array",
-          "description": "A list of blind levels.",
+          "description": "An array of blind levels.",
           "items": {
             "type": "string"
           }
@@ -69,8 +72,11 @@
       },
       "required": [
         "id",
-        "name",
-        "rounds"
+        "roundLength",
+        "startingBlindSmall",
+        "startingBlindBig",
+        "ante",
+        "blindLevels"
       ]
     },
     "BlindLevel": {
@@ -83,170 +89,160 @@
           "type": "string",
           "description": "Unique identifier for the blind level."
         },
-        "blindStructureId": {
-          "type": "string",
-          "description": "Reference to BlindStructure. (Relationship: BlindStructure 1:N BlindLevel)"
-        },
-        "roundNumber": {
-          "type": "number",
-          "description": "The number for each round (e.g., 1,2,3)"
-        },
         "smallBlind": {
           "type": "number",
-          "description": "The small blind amount."
+          "description": "The small blind amount for this level."
         },
         "bigBlind": {
           "type": "number",
-          "description": "The big blind amount."
+          "description": "The big blind amount for this level."
         },
         "ante": {
           "type": "number",
-          "description": "The ante amount."
+          "description": "The ante amount for this level."
         },
         "duration": {
           "type": "number",
-          "description": "The duration of the blind level in minutes."
+          "description": "The duration of this blind level in minutes."
+        },
+        "timerSettingsId": {
+          "type": "string",
+          "description": "Reference to TimerSettings. (Relationship: TimerSettings 1:N BlindLevel)"
         }
       },
       "required": [
         "id",
-        "blindStructureId",
-        "roundNumber",
         "smallBlind",
         "bigBlind",
         "ante",
-        "duration"
+        "duration",
+        "timerSettingsId"
       ]
     },
-    "PayoutStructure": {
+    "PrizePool": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "PayoutStructure",
+      "title": "PrizePool",
       "type": "object",
-      "description": "Defines the payout structure for a tournament.",
+      "description": "Represents the prize pool and payout information for a tournament.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the payout structure."
+          "description": "Unique identifier for the prize pool."
         },
-        "name": {
+        "tournamentId": {
           "type": "string",
-          "description": "Name of the payout structure (e.g., 'Winner Takes All')."
+          "description": "Reference to Tournament. (Relationship: Tournament 1:1 PrizePool)"
         },
-        "payouts": {
-          "type": "array",
-          "description": "An array of payout entries.",
-          "items": {
-            "type": "string"
-          }
+        "totalPrizePool": {
+          "type": "number",
+          "description": "The total prize pool amount."
+        },
+        "winnerPayout": {
+          "type": "number",
+          "description": "The amount paid out to the winner."
         }
       },
       "required": [
         "id",
-        "name",
-        "payouts"
+        "tournamentId",
+        "totalPrizePool",
+        "winnerPayout"
       ]
-    },
-    "PayoutEntry": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "PayoutEntry",
-      "type": "object",
-      "description": "Represents a single payout entry (e.g., 1st place gets 100%).",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the payout entry."
-        },
-        "payoutStructureId": {
-          "type": "string",
-          "description": "Reference to PayoutStructure. (Relationship: PayoutStructure 1:N PayoutEntry)"
-        },
-        "place": {
-          "type": "number",
-          "description": "The place that receives a payout (e.g., 1 for 1st place)."
-        },
-        "percentage": {
-          "type": "number",
-          "description": "The percentage of the prize pool awarded (e.g., 1.0 for 100%)."
-        }
-      },
-      "required": [
-        "id",
-        "payoutStructureId",
-        "place",
-        "percentage"
-      ]
-    },
-    "UserProfile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "UserProfile",
-      "type": "object",
-      "description": "Represents a user profile.",
-      "properties": {
-        "uid": {
-          "type": "string",
-          "description": "The user's unique ID from Firebase Auth."
-        },
-        "name": {
-          "type": "string",
-          "description": "The user's full name."
-        },
-        "nickname": {
-          "type": "string",
-          "description": "The user's nickname or username."
-        },
-        "email": {
-            "type": "string",
-            "format": "email",
-            "description": "The user's email address."
-        },
-        "role": {
-          "type": "string",
-          "enum": ["root", "admin", "player"],
-          "description": "The user's role in the application."
-        }
-      },
-      "required": ["uid", "name", "nickname", "email", "role"]
     }
   },
   "auth": {
     "providers": [
-      "password"
+      "password",
+      "anonymous"
     ]
   },
   "firestore": {
     "structure": [
       {
-        "path": "/users/{userId}",
+        "path": "/tournaments/{tournamentId}",
         "definition": {
-          "entityName": "UserProfile",
+          "entityName": "Tournament",
           "schema": {
-            "$ref": "#/backend/entities/UserProfile"
+            "$ref": "#/backend/entities/Tournament"
           },
-          "description": "Stores user profile information, including their role.",
+          "description": "Stores details of each tournament.",
           "params": [
             {
-              "name": "userId",
-              "description": "Unique identifier for the user, matching their Firebase Auth UID."
+              "name": "tournamentId",
+              "description": "Unique identifier for the tournament."
             }
           ]
         }
       },
       {
-        "path": "/cashGames/{gameId}",
+        "path": "/timer_settings/{timerSettingsId}",
         "definition": {
-          "entityName": "CashGame",
+          "entityName": "TimerSettings",
           "schema": {
-            "$ref": "#/backend/entities/CashGame"
+            "$ref": "#/backend/entities/TimerSettings"
           },
-          "description": "Stores all data related to a specific cash game session.",
+          "description": "Stores settings for the tournament timer.",
           "params": [
             {
-              "name": "gameId",
-              "description": "Unique identifier for the cash game."
+              "name": "timerSettingsId",
+              "description": "Unique identifier for the timer settings."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/timer_settings/{timerSettingsId}/blind_levels/{blindLevelId}",
+        "definition": {
+          "entityName": "BlindLevel",
+          "schema": {
+            "$ref": "#/backend/entities/BlindLevel"
+          },
+          "description": "Stores individual blind levels associated with timer settings.",
+          "params": [
+            {
+              "name": "timerSettingsId",
+              "description": "Unique identifier for the parent timer settings."
+            },
+            {
+              "name": "blindLevelId",
+              "description": "Unique identifier for the blind level."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/prize_pools/{prizePoolId}",
+        "definition": {
+          "entityName": "PrizePool",
+          "schema": {
+            "$ref": "#/backend/entities/PrizePool"
+          },
+          "description": "Stores prize pool information for tournaments.",
+          "params": [
+            {
+              "name": "prizePoolId",
+              "description": "Unique identifier for the prize pool."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "user",
+          "schema": {
+            "$ref": "#/backend/entities/Tournament"
+          },
+          "description": "Root collection for user-related data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
             }
           ]
         }
       }
-    ]
+    ],
+    "reasoning": "This Firestore structure is designed to manage Texas Hold'em poker tournaments, timer settings, blind levels, and prize pools. It prioritizes authorization independence by avoiding hierarchical `get()` calls and enforces a clear separation of concerns for improved security and debuggability.\n\n**Authorization Independence and QAPs:**\n\n*   The structure is designed for authorization independence, primarily using path-based ownership for `users/{userId}` related data and avoiding `get()` calls in security rules. Since there are no collaborative entities the use of Membership Maps are not required.\n*   Because path-based ownership is utilized, QAPs are inherently supported due to the isolation of user data. Listing tournaments owned by a user is easily secured by enforcing that the `request.auth.uid` matches the `userId` in the path.\n\n**Structure Overview:**\n\n*   `/tournaments/{tournamentId}`: Stores tournament details.\n*   `/timer_settings/{timerSettingsId}`: Stores timer settings associated with tournaments.\n*   `/timer_settings/{timerSettingsId}/blind_levels/{blindLevelId}`: Stores blind levels for each timer setting.\n*   `/prize_pools/{prizePoolId}`: Stores prize pool information for each tournament.\n*   `/users/{userId}`: Root for user-related data.  Could be expanded for profile data if needed in the future.\n\nThis structure facilitates clear and maintainable security rules, supporting secure `list` operations and scalable data management."
   }
 }
