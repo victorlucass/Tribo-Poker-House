@@ -706,32 +706,31 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     <div className="min-h-screen w-full bg-background p-4 md:p-8">
       {isDealing && <CardDealAnimation players={playersForAnimation} onComplete={onDealingComplete} />}
       <div className="mx-auto w-full max-w-7xl">
-        <header className="flex items-start justify-between gap-4 mb-8">
-          <div className="flex items-center gap-4">
+        <header className="mb-4 flex items-center justify-between">
             <Button asChild variant="outline" size="icon">
               <Link href="/cash-game">
                 <ArrowLeft />
               </Link>
             </Button>
-            <div>
-              <h1 className="font-headline text-3xl md:text-4xl font-bold text-accent">
-                {game?.name}
-              </h1>
-              <div className="flex items-center gap-2">
-                <p className="text-muted-foreground font-mono text-sm">ID da Sala: {gameId}</p>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
-                    <Copy className="h-4 w-4"/>
+            {isAdmin && (
+                <Button variant="outline" onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sair do Modo Admin
                 </Button>
-              </div>
-            </div>
-          </div>
-          {isAdmin && (
-            <Button variant="outline" onClick={logout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair do Modo Admin
-            </Button>
-          )}
+            )}
         </header>
+
+        <div className="mb-8 flex flex-col items-start gap-1">
+            <h1 className="font-headline text-3xl font-bold text-accent md:text-4xl">
+              {game?.name}
+            </h1>
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-sm text-muted-foreground">ID da Sala: {gameId}</p>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={copyGameId}>
+                  <Copy className="h-4 w-4"/>
+              </Button>
+            </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
