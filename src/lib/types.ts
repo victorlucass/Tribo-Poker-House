@@ -47,7 +47,7 @@ export interface CashGamePlayer {
 
 export interface PlayerTransaction {
     id: number;
-    type: 'buy-in' | 'rebuy' | 'add-on';
+    type: 'buy-in' | 'rebuy' | 'add-on' | 'admin-join';
     amount: number;
     chips: { chipId: number; count: number }[];
 }

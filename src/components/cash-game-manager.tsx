@@ -58,6 +58,7 @@ import {
   X,
   Hourglass,
   ThumbsDown,
+  LogIn,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -215,14 +216,18 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const positionsSet = game?.positionsSet ?? false;
   const requests = game?.requests ?? [];
 
+  const currentUserIsPlayer = useMemo(() => {
+    if (!user || !game) return false;
+    return game.players.some(p => p.id === user.uid);
+  }, [user, game]);
+
   const currentUserStatus = useMemo(() => {
+    if (currentUserIsPlayer) return 'player';
     if (!user || !game) return 'spectator';
-    if (game.players.some(p => p.id === user.uid)) return 'player';
     const userRequest = game.requests.find(r => r.userId === user.uid);
     if (userRequest) return userRequest.status; // 'pending' | 'approved' | 'declined'
-    if (game.ownerId === user.uid || isAdmin) return 'player'; // Admins are implicitly players
     return 'spectator';
-  }, [user, game, isAdmin]);
+  }, [user, game, currentUserIsPlayer]);
 
 
   const [newPlayerName, setNewPlayerName] = useState('');
@@ -241,7 +246,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const [transactionDetails, setTransactionDetails] = useState<{
-    type: 'buy-in' | 'rebuy' | 'approve';
+    type: 'buy-in' | 'rebuy' | 'approve' | 'admin-join';
     amount: number;
     playerId?: string;
     playerName?: string;
@@ -256,6 +261,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   // State for approving a player
   const [approvingPlayer, setApprovingPlayer] = useState<JoinRequest | null>(null);
   const [approvalBuyIn, setApprovalBuyIn] = useState('');
+
+  // State for admin joining
+  const [adminBuyIn, setAdminBuyIn] = useState('');
 
   const [isClient, setIsClient] = useState(false);
 
@@ -293,7 +301,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   };
 
   const handleOpenDistributionModal = (
-    type: 'buy-in' | 'rebuy' | 'approve',
+    type: 'buy-in' | 'rebuy' | 'approve' | 'admin-join',
     details: { playerId?: string; playerName?: string; amount: number; request?: JoinRequest }
   ) => {
     const { amount } = details;
@@ -330,7 +338,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   }, [manualChipCounts, sortedChips]);
 
   const confirmTransaction = async () => {
-    if (!transactionDetails || !gameRef) return;
+    if (!transactionDetails || !gameRef || !user) return;
   
     const { type, amount, playerId, playerName, request } = transactionDetails;
   
@@ -354,6 +362,21 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       return;
     }
     const currentGameData = gameDoc.data() as CashGame;
+
+    let seat: number | undefined = undefined;
+    if (currentGameData.positionsSet) {
+        const occupiedSeats = new Set(currentGameData.players.map((p) => p.seat));
+        for (let i = 1; i <= 10; i++) {
+            if (!occupiedSeats.has(i)) {
+                seat = i;
+                break;
+            }
+        }
+        if (seat === undefined) {
+            toast({ variant: 'destructive', title: 'Mesa Cheia', description: 'Não há assentos disponíveis.' });
+            return;
+        }
+    }
   
     if (type === 'buy-in') {
       const newPlayer: Player = {
@@ -372,25 +395,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       toast({ title: 'Jogador Adicionado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
       setNewPlayerName('');
       setNewPlayerBuyIn('');
-    } else if (type === 'approve' && request) {
-        let seat: number | undefined = undefined;
-        if (currentGameData.positionsSet) {
-            const occupiedSeats = new Set(currentGameData.players.map((p) => p.seat));
-            for (let i = 1; i <= 10; i++) {
-                if (!occupiedSeats.has(i)) {
-                    seat = i;
-                    break;
-                }
-            }
-            if (seat === undefined) {
-                toast({ variant: 'destructive', title: 'Mesa Cheia', description: 'Não há assentos disponíveis.' });
-                return;
-            }
-        }
-    
+    } else if ((type === 'approve' && request) || type === 'admin-join') {
+        const pId = type === 'admin-join' ? user.uid : request!.userId;
+        const pName = type === 'admin-join' ? user.nickname : request!.userName;
+
         const newPlayer: Player = {
-            id: request.userId,
-            name: request.userName,
+            id: pId,
+            name: pName,
             transactions: [{ id: 1, type: 'buy-in', amount: amount, chips: chipDistribution }],
             finalChipCounts: {},
             seat: seat ?? null,
@@ -402,14 +413,19 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
             updatedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
         }
 
-        // Atomically update players and requests
-        const updatedRequests = currentGameData.requests.map(r => r.userId === request.userId ? { ...r, status: 'approved' as const } : r);
-    
-        updateGame({
-            players: updatedPlayers,
-            requests: updatedRequests
-        });
-        toast({ title: 'Jogador Aprovado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
+        if (type === 'approve') {
+          // Atomically update players and requests
+          const updatedRequests = currentGameData.requests.map(r => r.userId === request!.userId ? { ...r, status: 'approved' as const } : r);
+      
+          updateGame({
+              players: updatedPlayers,
+              requests: updatedRequests
+          });
+          toast({ title: 'Jogador Aprovado!', description: `${pName} entrou na mesa com R$${amount.toFixed(2)}.` });
+        } else { // admin-join
+          updateGame({ players: updatedPlayers });
+          toast({ title: 'Você entrou no jogo!', description: `Você entrou na mesa com R$${amount.toFixed(2)}.` });
+        }
     } else if (type === 'rebuy' && playerId) {
       const playerIndex = currentGameData.players.findIndex(p => p.id === playerId);
       if (playerIndex === -1) return;
@@ -436,6 +452,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     setTransactionDetails(null);
     setApprovingPlayer(null);
     setApprovalBuyIn('');
+    setAdminBuyIn('');
   };
 
   const handleApproveRequest = (req: JoinRequest) => {
@@ -449,6 +466,19 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       playerName: req.userName,
       amount,
       request: req,
+    });
+  };
+
+  const handleAdminJoin = () => {
+    if (!adminBuyIn || !user) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Insira um valor de buy-in para entrar no jogo.' });
+      return;
+    }
+    const amount = parseFloat(adminBuyIn);
+    handleOpenDistributionModal('admin-join', {
+      playerId: user.uid,
+      playerName: user.nickname,
+      amount,
     });
   };
 
@@ -828,6 +858,54 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
           </Card>
 
           <main className="lg:col-span-2 space-y-8">
+            
+            {isAdmin && !currentUserIsPlayer && (
+               <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-primary">
+                    <LogIn /> Entrar no Jogo
+                  </CardTitle>
+                  <CardDescription>Como administrador, você pode entrar diretamente na mesa.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Dialog>
+                      <DialogTrigger asChild>
+                        <Button className="w-full">Entrar no Jogo</Button>
+                      </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Entrar na Mesa</DialogTitle>
+                        <DialogDescription>
+                          Insira o valor do seu buy-in para entrar no jogo.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="py-4">
+                        <Label htmlFor="admin-buy-in">Valor do Buy-in (R$)</Label>
+                        <Input
+                          id="admin-buy-in"
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="Ex: 50.00"
+                          value={adminBuyIn}
+                          onChange={(e) => setAdminBuyIn(e.target.value)}
+                        />
+                      </div>
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button variant="outline">Cancelar</Button>
+                        </DialogClose>
+                        <DialogClose asChild>
+                            <Button onClick={handleAdminJoin} disabled={!adminBuyIn}>
+                                Confirmar e Distribuir Fichas
+                            </Button>
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
+            )}
+
             {canManageGame && (
               <Card>
                 <CardHeader>
