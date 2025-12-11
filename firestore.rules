@@ -25,8 +25,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      // Creation is handled by a Cloud Function. Client-side creation is disallowed.
-      allow create: if false; 
+      // Allow user to create their own profile document
+      allow create: if request.auth.uid == userId;
       // Root can edit any user. Admins/players can only edit their own profile.
       allow update: if isRoot() || isOwner(userId);
       // Only root can delete users, but not the root user itself.

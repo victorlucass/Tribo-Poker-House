@@ -34,66 +34,69 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const handleAuthChange = async () => {
-      if (isUserLoading) {
-        return; // Aguarda o hook useFirebaseUser terminar
+    // This single, unified effect handles the entire auth flow:
+    // 1. Wait for Firebase Auth to be ready.
+    // 2. If user exists, fetch their Firestore profile.
+    // 3. Once all data is (or isn't) fetched, update loading state.
+    // 4. Based on final state, perform any necessary redirection.
+    const handleAuthFlow = async () => {
+      if (isUserLoading || !firestore) {
+        // If Firebase Auth is still initializing or Firestore is not ready, we wait.
+        // setLoading(true) is the default state, so we don't need to set it here.
+        return;
       }
 
-      if (firebaseUser && firestore) {
+      let finalProfile: UserProfile | null = null;
+
+      if (firebaseUser) {
+        // User is authenticated with Firebase, try to fetch their profile.
         try {
           const userDocRef = doc(firestore, 'users', firebaseUser.uid);
           const docSnap = await getDoc(userDocRef);
           if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as UserProfile);
+            finalProfile = docSnap.data() as UserProfile;
           } else {
-            console.warn("Perfil do usuário não encontrado no Firestore para UID:", firebaseUser.uid);
-            setUserProfile(null); // Usuário autenticado mas sem perfil
+            // This can happen if profile creation is delayed or failed.
+            // Treat user as not fully logged in for app purposes.
+            console.warn("User profile not found in Firestore for UID:", firebaseUser.uid);
           }
         } catch (error) {
-          console.error("Erro ao buscar perfil do usuário:", error);
-          setUserProfile(null);
+          console.error("Error fetching user profile:", error);
         }
-      } else {
-        setUserProfile(null); // Nenhum usuário autenticado
       }
       
-      setLoading(false); // Finaliza o carregamento geral aqui
+      // Set the final profile state
+      setUserProfile(finalProfile);
+
+      // Now, with the definitive user state, handle routing logic.
+      const publicPaths = ['/login', '/signup'];
+      const isPublicPath = publicPaths.includes(pathname);
+
+      if (finalProfile && isPublicPath) {
+        // Logged-in user on a public page, redirect to home.
+        router.push('/');
+      } else if (!finalProfile && !isPublicPath) {
+        // Not-logged-in user on a protected page, redirect to login.
+        router.push('/login');
+      } else {
+        // All other cases are valid (e.g., logged-in on protected page, not-logged-in on public page).
+        // We can now safely finish loading.
+        setLoading(false);
+      }
     };
 
-    handleAuthChange();
-  }, [firebaseUser, isUserLoading, firestore]);
-  
-  useEffect(() => {
-    // Este efeito lida APENAS com o redirecionamento e só executa quando o carregamento termina.
-    if (loading) {
-      return; 
-    }
-
-    const publicPaths = ['/login', '/signup'];
-    const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
-
-    if (!userProfile && !isPublicPath) {
-      router.push('/login');
-    }
-    
-    if (userProfile && isPublicPath) {
-      router.push('/');
-    }
-  }, [loading, userProfile, pathname, router]);
+    handleAuthFlow();
+  }, [firebaseUser, isUserLoading, firestore, pathname, router]);
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'root';
   
-  const publicPaths = ['/login', '/signup'];
-  const isPublicPath = publicPaths.some(p => pathname.startsWith(p));
-
-  // Mostra o loader enquanto a autenticação está em andamento,
-  // ou se estivermos prestes a redirecionar de uma rota protegida.
-  if (loading || (!userProfile && !isPublicPath)) {
+  if (loading) {
     return <FullScreenLoader />;
   }
 
+  // Once loading is false, render children. The useEffect has already handled redirects.
   return (
-    <AuthContext.Provider value={{ user: userProfile, loading: loading, isAdmin }}>
+    <AuthContext.Provider value={{ user: userProfile, loading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

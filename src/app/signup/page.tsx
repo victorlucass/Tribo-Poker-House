@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,8 +49,20 @@ export default function SignupPage() {
       }
 
       // Step 1: Create user in Firebase Auth.
-      // The user profile document will be created by a Cloud Function triggered by this event.
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Step 2: Create user profile document in Firestore.
+      // This will now be handled by a Cloud Function, but we keep a client-side fallback
+      // with updated security rules to allow it.
+      await setDoc(doc(firestore, "users", user.uid), {
+        uid: user.uid,
+        name: name,
+        nickname: nickname,
+        email: email,
+        role: 'player' // Default role for new users
+      });
+
 
       // The onAuthStateChanged listener in AuthProvider will handle the redirect.
       toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });
