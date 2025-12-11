@@ -246,7 +246,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       return;
     }
     const { playersWithDealtCards, sortedPlayers, dealer } = sortPlayersAndSetDealer(players);
-    setPlayersForAnimation(playersWithDealtCards);
+    // This is the list that the animation component will use to present the cards in order
+    setPlayersForAnimation(playersWithDealtCards); 
+    // This is the final state with seats assigned, saved to Firestore
     updateGame({
       players: sortedPlayers,
       dealerId: dealer.id,
@@ -871,7 +873,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
                             ))}
                             <TableCell></TableCell>
                           </TableRow>
-                          <TableRow className="bg-muted/80 hover:bg-muted font-bold">
+                          <TableRow className="bg-muted/80 hover-bg-muted font-bold">
                             <TableCell colSpan={2} className="text-right">
                               Valor Total na Mesa
                             </TableCell>
