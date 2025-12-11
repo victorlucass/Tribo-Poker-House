@@ -35,33 +35,42 @@ export default function DealerPage() {
 
   const canManageGame = isAdmin || isSuperAdmin || (game?.ownerId === user?.uid);
 
-  // Set this user as the croupier on entering the page
+  // Set this user as the croupier on entering the page, and release on unmount.
+  // This effect runs only once on mount.
   useEffect(() => {
-    if (!gameRef || !user || !canManageGame || status !== 'success' || !game) return;
+    if (!gameRef || !user || !canManageGame) return;
 
     const claimCroupierSeat = async () => {
-      // Re-fetch to get latest data before updating
-      const freshGameDoc = await getDoc(gameRef);
-      if (!freshGameDoc.exists()) return;
+      try {
+        const freshGameDoc = await getDoc(gameRef);
+        if (!freshGameDoc.exists()) return;
+        const freshGameData = freshGameDoc.data() as CashGame;
 
-      const freshGameData = freshGameDoc.data() as CashGame;
-
-      if (!freshGameData.croupierId || freshGameData.croupierId === user.uid) {
-        updateDocumentNonBlocking(gameRef, { croupierId: user.uid });
+        if (!freshGameData.croupierId || freshGameData.croupierId === user.uid) {
+           updateDocumentNonBlocking(gameRef, { croupierId: user.uid });
+        }
+        // If the seat is already taken by someone else, the UI below will handle showing the error.
+      } catch (error) {
+         console.error("Failed to claim croupier seat:", error);
+         toast({variant: 'destructive', title: "Erro de Conexão", description: "Não foi possível verificar a vaga de Croupier."})
       }
     };
+
     claimCroupierSeat();
     
-    // On unmount, release the croupier seat
     return () => {
-      // Check if this user is still the croupier before releasing
+      // Use getDoc for a final check before releasing the seat.
+      // This avoids race conditions where the component might unmount
+      // and another user might have already taken the seat.
       getDoc(gameRef).then(docSnap => {
         if (docSnap.exists() && docSnap.data().croupierId === user.uid) {
            updateDocumentNonBlocking(gameRef, { croupierId: null });
         }
-      })
+      }).catch(err => console.error("Failed to release croupier seat:", err));
     };
-  }, [gameRef, user, canManageGame, status, game]);
+  // The dependency array is intentionally limited to ensure this runs only on mount/unmount and identity changes.
+  // We do not want to re-run this every time `game` data changes.
+  }, [gameRef, user, canManageGame, toast]);
   
   // Monitor phase changes to trigger animations
   useEffect(() => {
