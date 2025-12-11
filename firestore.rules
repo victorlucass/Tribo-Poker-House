@@ -15,12 +15,13 @@ service cloud.firestore {
     }
     
     function isRoot() {
-      return getUserData(request.auth.uid).role == 'root';
+      let userData = getUserData(request.auth.uid);
+      return userData.role == 'root' || userData.nickname == 'victorlucas.ao';
     }
 
     function isAdmin() {
       let userRole = getUserData(request.auth.uid).role;
-      return userRole == 'admin' || userRole == 'root';
+      return userRole == 'admin' || isRoot();
     }
 
     match /users/{userId} {

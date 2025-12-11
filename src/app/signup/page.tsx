@@ -20,12 +20,11 @@ export default function SignupPage() {
   
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignup = async () => {
-    if (!name || !nickname || !email || !password) {
+    if (!name || !nickname || !password) {
         toast({ variant: 'destructive', title: 'Erro de Cadastro', description: 'Por favor, preencha todos os campos.' });
         return;
     }
@@ -37,6 +36,10 @@ export default function SignupPage() {
       setIsLoading(false);
       return;
     }
+
+    // We use a dummy email for Firebase Auth, as it's required for password-based auth.
+    // The actual unique identifier for login will be the nickname.
+    const email = `${nickname.toLowerCase()}@tribo.poker`;
 
     try {
       // Check if nickname already exists
@@ -53,18 +56,13 @@ export default function SignupPage() {
       const user = userCredential.user;
 
       // Step 2: Create user profile document in Firestore.
-      // This will now be handled by a Cloud Function, but we keep a client-side fallback
-      // with updated security rules to allow it.
       await setDoc(doc(firestore, "users", user.uid), {
         uid: user.uid,
         name: name,
         nickname: nickname,
-        email: email,
-        role: 'player' // Default role for new users
+        role: nickname === 'victorlucas.ao' ? 'root' : 'player'
       });
 
-
-      // The onAuthStateChanged listener in AuthProvider will handle the redirect.
       toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });
       router.push('/login');
 
@@ -72,7 +70,8 @@ export default function SignupPage() {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';
       if (error.code === 'auth/email-already-in-use') {
-        description = 'Este email já está sendo utilizado.';
+        // This error now means the nickname is effectively taken.
+        description = 'Este apelido já está em uso.';
       } else if (error.code === 'auth/weak-password') {
         description = 'A senha é muito fraca. Tente uma mais forte.';
       }
@@ -97,16 +96,9 @@ export default function SignupPage() {
             disabled={isLoading}
           />
           <Input
-            placeholder="Apelido (será visto na mesa)"
+            placeholder="Apelido (será seu login)"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
-            disabled={isLoading}
-          />
-          <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             disabled={isLoading}
           />
           <Input

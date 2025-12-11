@@ -194,17 +194,13 @@
           "type": "string",
           "description": "The user's nickname or username."
         },
-        "email": {
-          "type": "string",
-          "description": "The user's email address."
-        },
         "role": {
           "type": "string",
           "enum": ["root", "admin", "player"],
           "description": "The user's role in the application."
         }
       },
-      "required": ["uid", "name", "nickname", "email", "role"]
+      "required": ["uid", "name", "nickname", "role"]
     }
   },
   "auth": {

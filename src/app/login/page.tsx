@@ -17,49 +17,26 @@ export default function LoginPage() {
   const auth = useFirebaseAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!loginIdentifier || !password) {
+    if (!nickname || !password) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, preencha todos os campos.' });
       return;
     }
     setIsLoading(true);
 
-    // This is the critical check. We must ensure both auth and firestore are available.
     if (!auth || !firestore) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Serviço de autenticação não disponível. Tente novamente em instantes.' });
       setIsLoading(false);
       return;
     }
 
-    let emailToLogin = loginIdentifier;
-    
-    // Check if the identifier is a nickname or an email
-    if (!loginIdentifier.includes('@')) {
-        // It's a nickname, so we need to find the user's email
-        try {
-            const usersRef = collection(firestore, 'users');
-            const q = query(usersRef, where('nickname', '==', loginIdentifier));
-            const querySnapshot = await getDocs(q);
-
-            if (querySnapshot.empty) {
-                toast({ variant: 'destructive', title: 'Falha no Login', description: 'Usuário não encontrado.' });
-                setIsLoading(false);
-                return;
-            }
-            // Assuming nicknames are unique, get the first result
-            emailToLogin = querySnapshot.docs[0].data().email;
-        } catch(error) {
-            console.error("Error fetching user by nickname: ", error);
-            toast({ variant: 'destructive', title: 'Falha no Login', description: 'Ocorreu um erro ao verificar o usuário.' });
-            setIsLoading(false);
-            return;
-        }
-    }
-
+    // Since we are not using real emails, we construct a fake email from the nickname.
+    // This is required by Firebase Auth for password-based authentication.
+    const emailToLogin = `${nickname.toLowerCase()}@tribo.poker`;
 
     try {
       await signInWithEmailAndPassword(auth, emailToLogin, password);
@@ -69,7 +46,7 @@ export default function LoginPage() {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        description = 'Email/Apelido ou senha incorretos.';
+        description = 'Apelido ou senha incorretos.';
       }
       toast({ variant: 'destructive', title: 'Falha no Login', description });
     } finally {
@@ -82,13 +59,13 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><KeyRound /> Acesso</CardTitle>
-          <CardDescription>Faça login com seu email ou apelido para gerenciar e participar das salas de jogo.</CardDescription>
+          <CardDescription>Faça login com seu apelido para gerenciar e participar das salas de jogo.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
-            placeholder="Email ou Apelido"
-            value={loginIdentifier}
-            onChange={(e) => setLoginIdentifier(e.target.value)}
+            placeholder="Apelido"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
             disabled={isLoading}
           />
           <Input
