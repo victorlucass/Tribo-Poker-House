@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { useAuth as useFirebaseAuth, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,11 +20,12 @@ export default function SignupPage() {
   
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignup = async () => {
-    if (!name || !nickname || !password) {
+    if (!name || !nickname || !email || !password) {
         toast({ variant: 'destructive', title: 'Erro de Cadastro', description: 'Por favor, preencha todos os campos.' });
         return;
     }
@@ -36,8 +37,6 @@ export default function SignupPage() {
       setIsLoading(false);
       return;
     }
-
-    const email = `${nickname.toLowerCase().trim()}@tribo.poker`;
 
     try {
       // Check if nickname is already taken in Firestore
@@ -58,6 +57,9 @@ export default function SignupPage() {
         displayName: name,
       });
 
+      // The backend function will create the user profile with the nickname.
+      // We can redirect to login.
+
       toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });
       router.push('/login');
 
@@ -65,9 +67,11 @@ export default function SignupPage() {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';
       if (error.code === 'auth/email-already-in-use') {
-        description = 'Este apelido já está registrado. Tente fazer login ou use outro apelido.';
+        description = 'Este e-mail já está registrado. Tente fazer login ou use outro e-mail.';
       } else if (error.code === 'auth/weak-password') {
         description = 'A senha é muito fraca. Tente uma com pelo menos 6 caracteres.';
+      } else if (error.code === 'auth/invalid-email') {
+        description = 'O e-mail fornecido não é válido.';
       }
       toast({ variant: 'destructive', title: 'Falha no Cadastro', description });
     } finally {
@@ -93,6 +97,13 @@ export default function SignupPage() {
             placeholder="Apelido (será seu login)"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
+            disabled={isLoading}
+          />
+           <Input
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             disabled={isLoading}
           />
           <Input

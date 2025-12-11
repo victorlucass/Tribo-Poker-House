@@ -15,13 +15,13 @@ export default function LoginPage() {
   const router = useRouter();
   const auth = useFirebaseAuth();
   const { toast } = useToast();
-  const [nickname, setNickname] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!nickname || !password) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, preencha o apelido e a senha.' });
+    if (!email || !password) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, preencha o email e a senha.' });
       return;
     }
     setIsLoading(true);
@@ -32,17 +32,16 @@ export default function LoginPage() {
       return;
     }
 
-    const emailToLogin = `${nickname.toLowerCase().trim()}@tribo.poker`;
-
     try {
-      await signInWithEmailAndPassword(auth, emailToLogin, password);
+      await signInWithEmailAndPassword(auth, email, password);
       toast({ title: 'Login bem-sucedido!', description: 'Bem-vindo de volta.' });
-      router.push('/');
+      // The AuthProvider will handle the redirect to the home page.
+      // We don't need to push the router here anymore.
     } catch (error: any) {
       console.error(error);
       let description = 'Ocorreu um erro desconhecido.';
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        description = 'Apelido ou senha incorretos.';
+        description = 'Email ou senha incorretos.';
       }
       toast({ variant: 'destructive', title: 'Falha no Login', description });
     } finally {
@@ -55,13 +54,14 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><KeyRound /> Acesso</CardTitle>
-          <CardDescription>Faça login com seu apelido para gerenciar e participar das salas de jogo.</CardDescription>
+          <CardDescription>Faça login com seu email e senha para gerenciar e participar das salas de jogo.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
-            placeholder="Apelido"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             disabled={isLoading}
           />
           <Input

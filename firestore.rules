@@ -16,6 +16,7 @@ service cloud.firestore {
     
     function isRoot() {
       let userData = getUserData(request.auth.uid);
+      // Check for nickname instead of email for the root user
       return userData.role == 'root' || userData.nickname == 'victorlucas.ao';
     }
 
@@ -26,8 +27,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isSignedIn();
-      // Allow user to create their own profile document
-      allow create: if request.auth.uid == userId;
+      // Allow user to create their own profile document via a backend function
+      allow create: if request.resource.data.uid == request.auth.uid;
       // Root can edit any user. Admins/players can only edit their own profile.
       allow update: if isRoot() || isOwner(userId);
       // Only root can delete users, but not the root user itself.

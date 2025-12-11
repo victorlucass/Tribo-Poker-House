@@ -87,5 +87,6 @@ export interface UserProfile {
   uid: string;
   name: string;
   nickname: string;
+  email: string;
   role: 'root' | 'admin' | 'player';
 }
