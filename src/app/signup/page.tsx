@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateProfile } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
-import { useAuth as useFirebaseAuth, useFirestore, useUser } from '@/firebase';
+import { useAuth as useFirebaseAuth, useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,12 +11,10 @@ import { useToast } from '@/hooks/use-toast';
 import { UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { initiateEmailSignUp } from '@/firebase/non-blocking-login';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 export default function SignupPage() {
   const router = useRouter();
   const auth = useFirebaseAuth();
-  const firestore = useFirestore();
   const { user: firebaseUser, isUserLoading } = useUser();
   const { toast } = useToast();
   
@@ -30,43 +27,23 @@ export default function SignupPage() {
 
   // This effect runs when the firebaseUser object changes after signup.
   useEffect(() => {
-    if (signupInitiated && firebaseUser && !isUserLoading && firestore) {
-      const finishSignup = async () => {
-        try {
-          // 1. Update Firebase Auth profile
-          await updateProfile(firebaseUser, { displayName: name });
-
-          // 2. Determine user role
-          const isSuperAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL === email;
-          const role = isSuperAdmin ? 'super_admin' : 'player';
-
-          // 3. Create user profile in Firestore
-          const userDocRef = doc(firestore, 'users', firebaseUser.uid);
-          setDocumentNonBlocking(userDocRef, {
-            uid: firebaseUser.uid,
-            name,
-            nickname,
-            email: firebaseUser.email,
-            role: role,
-          }, {});
-
-          toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para a tela de login.' });
-          router.push('/login');
-
-        } catch (error: any) {
-           let description = 'Ocorreu um erro desconhecido ao finalizar o cadastro.';
-            if (error.code === 'permission-denied') {
-              description = 'Falha de permissão ao salvar o perfil. Verifique as regras de segurança do Firestore.'
-            }
-           toast({ variant: 'destructive', title: 'Falha no Cadastro', description });
-        } finally {
+    // If signup was initiated and we have a user, update their Auth profile.
+    // The AuthProvider will handle creating the Firestore document.
+    if (signupInitiated && firebaseUser && !isUserLoading) {
+      updateProfile(firebaseUser, { displayName: name })
+        .then(() => {
+            toast({ title: 'Cadastro realizado!', description: 'Bem-vindo! Redirecionando...' });
+            // The AuthProvider will handle redirection.
+        })
+        .catch((error) => {
+            toast({ variant: 'destructive', title: 'Erro ao Salvar Perfil', description: 'Não foi possível salvar seu nome de usuário.' });
+        })
+        .finally(() => {
             setIsSigningUp(false);
             setSignupInitiated(false);
-        }
-      }
-      finishSignup();
+        });
     }
-  }, [firebaseUser, isUserLoading, signupInitiated, firestore, name, nickname, email, router, toast]);
+  }, [firebaseUser, isUserLoading, signupInitiated, name, router, toast]);
 
 
   const handleSignup = () => {
@@ -77,7 +54,7 @@ export default function SignupPage() {
     
     setIsSigningUp(true);
 
-    if (!auth || !firestore) {
+    if (!auth) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Serviços do Firebase não disponíveis. Tente novamente em instantes.' });
       setIsSigningUp(false);
       return;
@@ -85,7 +62,7 @@ export default function SignupPage() {
 
     try {
         setSignupInitiated(true);
-        // This will trigger the onAuthStateChanged listener, and the useEffect above will complete the registration.
+        // This will trigger the onAuthStateChanged listener in AuthProvider
         initiateEmailSignUp(auth, email, password);
     } catch (error: any) {
         setSignupInitiated(false);
@@ -139,7 +116,7 @@ export default function SignupPage() {
           />
         </CardContent>
         <CardFooter className="flex-col gap-4">
-          <Button className="w-full" onClick={handleSignup} disabled={isSigningUp}>
+          <Button className="w-full" onClick={handleSignup} disabled={isSigningUp || isUserLoading}>
             {isSigningUp ? 'Criando...' : 'Criar Conta'}
           </Button>
            <Button variant="link" asChild>

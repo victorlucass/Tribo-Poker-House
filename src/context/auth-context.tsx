@@ -3,11 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useUser as useFirebaseUser, useFirestore, useAuth as useFirebaseAuth } from '@/firebase';
 import type { UserProfile } from '@/lib/types';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -52,7 +53,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const isPublicPath = ['/login', '/signup'].includes(pathname);
 
-    // If we're still waiting for Firebase Auth to initialize, show loader on protected pages.
+    // If we're still waiting for Firebase Auth to initialize, show loader.
     if (isUserLoading) {
       setLoading(true);
       return;
@@ -68,40 +69,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       return;
     }
-
-    // There is a Firebase user, but we might not have their profile yet.
-    if (!userProfile && firestore) {
+    
+    // There is a Firebase user.
+    if (firestore) {
       const userDocRef = doc(firestore, 'users', firebaseUser.uid);
       getDoc(userDocRef)
         .then((docSnap) => {
           if (docSnap.exists()) {
             setUserProfile(docSnap.data() as UserProfile);
-            // If user is now fetched and they are on a public page, redirect to home.
             if (isPublicPath) {
               router.push('/');
             } else {
               setLoading(false);
             }
           } else {
-            // Failsafe: user in Auth, but not Firestore.
-            console.error(`Profile not found for UID: ${firebaseUser.uid}. Forcing logout.`);
-            handleLogout();
+            // Profile doesn't exist, so let's create it.
+            // This handles the race condition during signup.
+            const isSuperAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL === firebaseUser.email;
+            const role = isSuperAdmin ? 'super_admin' : 'player';
+
+            // Nickname is not available directly on user creation with email/password.
+            // We'll need to retrieve it from the signup form.
+            // For now, let's use a placeholder or derive from email.
+            const derivedNickname = firebaseUser.email?.split('@')[0] || `user_${firebaseUser.uid.substring(0, 5)}`;
+
+            const newProfile: UserProfile = {
+              uid: firebaseUser.uid,
+              name: firebaseUser.displayName || 'Novo Usuário',
+              nickname: derivedNickname,
+              email: firebaseUser.email!,
+              role: role,
+            };
+            
+            // Use a non-blocking write to avoid getting stuck here
+            setDocumentNonBlocking(userDocRef, newProfile, {});
+            setUserProfile(newProfile); // Optimistically set the profile
+
+            toast({ title: 'Bem-vindo!', description: 'Seu perfil foi criado.' });
+            
+            if (isPublicPath) {
+                router.push('/');
+            } else {
+                setLoading(false);
+            }
           }
         })
         .catch((error) => {
-          console.error("Error fetching user profile:", error);
-          toast({ variant: "destructive", title: "Erro de Perfil", description: "Não foi possível carregar o perfil." });
+          console.error("Error fetching/creating user profile:", error);
+          toast({ variant: "destructive", title: "Erro de Perfil", description: "Não foi possível carregar ou criar o seu perfil." });
           handleLogout();
         });
-    } else if (userProfile) {
-        // We have the user profile. If they are on a public path, redirect them.
-        if(isPublicPath){
-            router.push('/');
-        } else {
-            setLoading(false);
-        }
     }
-  }, [firebaseUser, userProfile, isUserLoading, firestore, pathname, router, handleLogout, toast]);
+
+  }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout, toast]);
 
 
   const isSuperAdmin = !!userProfile && userProfile.role === 'super_admin';
