@@ -41,10 +41,12 @@ service cloud.firestore {
     }
     
     function isSuperAdmin(userId) {
-      return getUserRole(userId) == 'super_admin';
+      // Check if user has a super_admin role in their user document
+      return isSignedIn() && getUserRole(userId) == 'super_admin';
     }
 
     function isAdmin(userId) {
+      if (!isSignedIn()) { return false; }
       let userRole = getUserRole(userId);
       return userRole == 'admin' || userRole == 'super_admin';
     }
@@ -54,18 +56,22 @@ service cloud.firestore {
     // --------------------------------
 
     match /users/{userId} {
-      // Any signed-in user can read another user's profile.
-      // Admins can list all users.
-      // Only the owner can create their own profile.
-      // Super admins can change any role. Admins can change roles of players.
-      // Owners can update their own profile, but cannot change their own role.
-      // Owners and super admins can delete users.
-      allow read: if isSignedIn();
-      allow list: if isAdmin(request.auth.uid);
+      // A user can only create their own user document.
       allow create: if isOwner(userId);
-      allow update: if (isSuperAdmin(request.auth.uid)) ||
-                       (isAdmin(request.auth.uid) && resource.data.role != 'super_admin') ||
-                       (isOwner(userId) && request.resource.data.role == resource.data.role);
+      
+      // Any authenticated user can read any profile (e.g. to see names). List is restricted.
+      allow get: if isSignedIn();
+      // Only admins can list all users for the admin panel.
+      allow list: if isAdmin(request.auth.uid);
+      
+      // A user can update their own profile, but cannot change their own role.
+      // A Super Admin can update any profile, including roles.
+      // An Admin can update any profile, but cannot make someone a Super Admin or change another Admin.
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) ||
+                       (isSuperAdmin(request.auth.uid)) ||
+                       (isAdmin(request.auth.uid) && resource.data.role == 'player' && request.resource.data.role != 'super_admin');
+
+      // Owner or Super Admin can delete a user account document.
       allow delete: if isOwner(userId) || isSuperAdmin(request.auth.uid);
     }
     
@@ -78,7 +84,7 @@ service cloud.firestore {
       allow create: if isAdmin(request.auth.uid);
       
       // An admin/owner can update anything.
-      // Any signed in user can add a request to join.
+      // Any signed in user can add a request to join by updating the `requests` array.
       allow update: if (isAdmin(request.auth.uid) || isOwner(resource.data.ownerId)) ||
                        (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']));
       

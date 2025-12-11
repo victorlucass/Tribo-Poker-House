@@ -49,11 +49,13 @@ export default function SignupPage() {
       });
 
       // Determine user role
+      // NEXT_PUBLIC_ADMIN_EMAIL is set in the .env file
       const isSuperAdmin = process.env.NEXT_PUBLIC_ADMIN_EMAIL === email;
       const role = isSuperAdmin ? 'super_admin' : 'player';
 
 
       // Create user profile document in Firestore
+      // The security rules allow a user to create their own document
       const userDocRef = doc(firestore, 'users', user.uid);
       await setDoc(userDocRef, {
         uid: user.uid,
@@ -75,6 +77,8 @@ export default function SignupPage() {
         description = 'A senha é muito fraca. Tente uma com pelo menos 6 caracteres.';
       } else if (error.code === 'auth/invalid-email') {
         description = 'O e-mail fornecido não é válido.';
+      } else if (error.code === 'permission-denied') {
+        description = 'Falha de permissão ao salvar o perfil. Verifique as regras de segurança do Firestore.'
       }
       toast({ variant: 'destructive', title: 'Falha no Cadastro', description });
     } finally {
