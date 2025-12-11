@@ -8,6 +8,8 @@ import { User, Dices, Flame } from 'lucide-react';
 interface PokerTableProps {
   players: PlayerHandState[];
   dealerId?: string | null;
+  smallBlindPlayerId?: string | null;
+  bigBlindPlayerId?: string | null;
   activePlayerId?: string | null;
   communityCards?: Card[];
   pots?: Pot[];
@@ -62,7 +64,9 @@ const CardComponent: React.FC<{ card: Card, isFaceDown?: boolean, isAnimating?: 
 
 const PokerTable: React.FC<PokerTableProps> = ({ 
     players, 
-    dealerId, 
+    dealerId,
+    smallBlindPlayerId,
+    bigBlindPlayerId,
     activePlayerId, 
     communityCards = [], 
     pots = [],
@@ -115,8 +119,9 @@ const PokerTable: React.FC<PokerTableProps> = ({
         const { left, top } = getSeatPosition(index, sortedPlayers.length);
         const isDealer = player.id === dealerId;
         const isActive = player.id === activePlayerId;
-        // The small/big blind is not directly on the PokerTable anymore, but we can derive it if needed
-        // This is a simplification; in a real app, you might pass SB/BB IDs down.
+        const isSmallBlind = player.id === smallBlindPlayerId;
+        const isBigBlind = player.id === bigBlindPlayerId;
+
 
         return (
           <div
@@ -164,8 +169,18 @@ const PokerTable: React.FC<PokerTableProps> = ({
             
             <div className="absolute -bottom-3 w-14 flex justify-center items-center gap-1">
                 {isDealer && (
-                    <div className="w-6 h-6 bg-accent text-accent-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
+                    <div title="Dealer" className="w-6 h-6 bg-accent text-accent-foreground rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
                         D
+                    </div>
+                )}
+                 {isSmallBlind && (
+                    <div title="Small Blind" className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
+                        SB
+                    </div>
+                )}
+                {isBigBlind && (
+                    <div title="Big Blind" className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold border-2 border-background z-10">
+                        BB
                     </div>
                 )}
             </div>

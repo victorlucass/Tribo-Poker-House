@@ -58,6 +58,8 @@ export interface HandState {
     lastRaise: number;
     smallBlindAmount: number;
     bigBlindAmount: number;
+    smallBlindPlayerId?: string | null;
+    bigBlindPlayerId?: string | null;
     players: PlayerHandState[];
 }
 

@@ -70,7 +70,7 @@ export default function DealerPage() {
     };
   // The dependency array is intentionally limited to ensure this runs only on mount/unmount and identity changes.
   // We do not want to re-run this every time `game` data changes.
-  }, [gameRef, user, canManageGame, toast]);
+  }, [gameRef, user?.uid, canManageGame, toast]);
   
   // Monitor phase changes to trigger animations
   useEffect(() => {
@@ -220,6 +220,8 @@ export default function DealerPage() {
                 isAllIn: false,
             }))}
             dealerId={game.dealerId}
+            smallBlindPlayerId={game.handState?.smallBlindPlayerId}
+            bigBlindPlayerId={game.handState?.bigBlindPlayerId}
             activePlayerId={game.handState?.activePlayerId}
             communityCards={game.handState?.communityCards}
             pots={game.handState?.pots}
