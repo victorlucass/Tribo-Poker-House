@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
-import { FirebaseClientProvider } from '@/firebase';
-import { AuthProvider } from '@/context/auth-context';
+// import { FirebaseClientProvider } from '@/firebase';
+// import { AuthProvider } from '@/context/auth-context';
 
 export const metadata: Metadata = {
   title: 'Tribo Poker House',
@@ -23,11 +23,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
       </head>
       <body className={cn('font-body antialiased')}>
-        <FirebaseClientProvider>
-          <AuthProvider>
+        {/* <FirebaseClientProvider>
+          <AuthProvider> */}
             {children}
-          </AuthProvider>
-        </FirebaseClientProvider>
+          {/* </AuthProvider>
+        </FirebaseClientProvider> */}
         <Toaster />
       </body>
     </html>

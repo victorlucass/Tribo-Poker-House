@@ -4,10 +4,14 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Zap, Users, LogOut, ShieldCheck, LogIn } from 'lucide-react';
-import { useAuth } from '@/context/auth-context';
+// import { useAuth } from '@/context/auth-context';
 
 export default function Home() {
-  const { user, isSuperAdmin, handleLogout } = useAuth();
+  // const { user, isSuperAdmin, handleLogout } = useAuth();
+  const user = null;
+  const isSuperAdmin = false;
+  const handleLogout = () => {};
+
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
