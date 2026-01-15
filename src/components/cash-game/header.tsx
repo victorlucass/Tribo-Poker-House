@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Copy, LogIn, Wallet, Dices, LogOut } from 'lucide-react';
+import { ArrowLeft, Copy, LogIn, Wallet, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 
@@ -21,7 +21,6 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
   gameId,
   isClient,
   currentUserIsPlayer,
-  canManageGame,
   onLogoutClick,
 }) => {
   const { toast } = useToast();
@@ -53,14 +52,6 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {canManageGame && (
-            <Button variant="primary" asChild>
-              <Link href={`/cash-game/${gameId}/dealer`}>
-                <Dices className="mr-2 h-4 w-4" />
-                Modo Croupier
-              </Link>
-            </Button>
-        )}
         {currentUserIsPlayer && (
             <Button variant="secondary" asChild>
               <Link href={`/cash-game/${gameId}/my-situation`}>
@@ -88,3 +79,5 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
 };
 
 export default CashGameHeader;
+
+    

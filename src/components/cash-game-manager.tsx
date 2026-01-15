@@ -12,7 +12,7 @@ import type {
 } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { History, LogIn, Maximize } from 'lucide-react';
+import { History, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
@@ -20,7 +20,7 @@ import { sortPlayersAndSetDealer } from '@/lib/poker-utils';
 import PokerTable from './poker-table';
 import CardDealAnimation from './card-deal-animation';
 import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
-import { doc, getDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
@@ -199,7 +199,6 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
   const [isCashOutOpen, setIsCashOutOpen] = useState(false);
   const [isSettlementOpen, setIsSettlementOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
 
   const [transactionDetails, setTransactionDetails] = useState<{
@@ -524,22 +523,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               onAdminJoin={(buyIn) => user && handleOpenDistributionModal('admin-join', { playerId: user.uid, playerName: user.nickname, amount: parseFloat(buyIn)})}
             />
 
-            {game.positionsSet && game.handState && (
-               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+            {game.positionsSet && (
+              <Card>
+                <CardHeader>
                   <CardTitle>Mesa de Jogo</CardTitle>
-                  <Button variant="ghost" size="icon" onClick={() => setIsFullscreen(true)}>
-                    <Maximize />
-                  </Button>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <PokerTable
-                    players={game.handState.players}
-                    dealerId={game.dealerId}
-                    activePlayerId={game.handState.activePlayerId}
-                    communityCards={game.handState.communityCards}
-                    pots={game.handState.pots}
-                  />
+                  <PokerTable players={players} dealerId={game.dealerId} />
                 </CardContent>
               </Card>
             )}
@@ -664,3 +654,5 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
 };
 
 export default CashGameManager;
+
+    
