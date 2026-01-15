@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter as UiTableFooter } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Edit, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CashGamePlayer, CashGameChip, CashedOutPlayer, JoinRequest, PlayerTransaction } from '@/lib/types';
 
@@ -110,21 +110,27 @@ interface ChipDistributionDialogProps {
     onOpenChange: (isOpen: boolean) => void;
     transactionDetails: { type: string, playerName?: string, amount: number, chipMap?: Map<number, number> };
     sortedChips: CashGameChip[];
+    initialChips?: { chipId: number; count: number }[];
     onConfirm: (chipDistribution: { chipId: number; count: number }[], distributedValue: number) => void;
     distributeChips: (amount: number, chips: CashGameChip[]) => {chipId: number, count: number}[];
 }
 
-export const ChipDistributionDialog: React.FC<ChipDistributionDialogProps> = ({ isOpen, onOpenChange, transactionDetails, sortedChips, onConfirm, distributeChips }) => {
+export const ChipDistributionDialog: React.FC<ChipDistributionDialogProps> = ({ isOpen, onOpenChange, transactionDetails, sortedChips, initialChips, onConfirm, distributeChips }) => {
     const [manualChipCounts, setManualChipCounts] = useState<Map<number, number>>(new Map());
 
     useEffect(() => {
-        if (transactionDetails?.amount && sortedChips.length > 0) {
-            const suggestedDistribution = distributeChips(transactionDetails.amount, sortedChips);
+        if (isOpen && transactionDetails?.amount && sortedChips.length > 0) {
             const chipMap = new Map<number, number>();
-            suggestedDistribution.forEach(c => chipMap.set(c.chipId, c.count));
+            
+            if (initialChips && initialChips.length > 0) {
+                initialChips.forEach(c => chipMap.set(c.chipId, c.count));
+            } else {
+                const suggestedDistribution = distributeChips(transactionDetails.amount, sortedChips);
+                suggestedDistribution.forEach(c => chipMap.set(c.chipId, c.count));
+            }
             setManualChipCounts(chipMap);
         }
-    }, [transactionDetails, sortedChips, distributeChips]);
+    }, [isOpen, transactionDetails, sortedChips, distributeChips, initialChips]);
 
 
     const handleChipCountChange = (chipId: number, countStr: string) => {
@@ -213,10 +219,22 @@ interface PlayerDetailsDialogProps {
     sortedChips: CashGameChip[];
     onOpenChange: (isOpen: boolean) => void;
     onRebuy: (amount: number) => void;
+    onUpdateTransaction: (transactionId: number, newAmount: number, newChips: { chipId: number; count: number }[]) => void;
+    onDeleteTransaction: (transactionId: number) => void;
+    distributeChips: (amount: number, chips: CashGameChip[]) => {chipId: number, count: number}[];
 }
 
-export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ player, sortedChips, onOpenChange, onRebuy }) => {
+export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ 
+    player, 
+    sortedChips, 
+    onOpenChange, 
+    onRebuy, 
+    onUpdateTransaction, 
+    onDeleteTransaction,
+    distributeChips
+}) => {
     const [rebuyAmount, setRebuyAmount] = useState('');
+    const [transactionToEdit, setTransactionToEdit] = useState<PlayerTransaction | null>(null);
 
     const getPlayerTotalChips = useCallback((player: CashGamePlayer) => {
         const playerTotalChips = new Map<number, number>();
@@ -235,10 +253,21 @@ export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ player
         setRebuyAmount('');
         onOpenChange(false);
     }
+
+    const handleEditClick = (trans: PlayerTransaction) => {
+        setTransactionToEdit(trans);
+    };
+
+    const handleDeleteClick = (transId: number) => {
+        if (confirm('Tem certeza que deseja excluir esta transação? As fichas serão devolvidas para a maleta.')) {
+            onDeleteTransaction(transId);
+        }
+    };
       
     return (
+        <>
         <Dialog open={!!player} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-5xl">
             <DialogHeader>
                 <DialogTitle>Detalhes de {player?.name}</DialogTitle>
                 <DialogDescription>
@@ -248,6 +277,7 @@ export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ player
 
             {player && (
                 <>
+                <ScrollArea className="h-[300px] rounded-md border">
                 <Table>
                     <TableHeader>
                     <TableRow>
@@ -256,32 +286,43 @@ export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ player
                         {sortedChips.map((chip) => (
                         <TableHead key={chip.id} className="text-center">
                             <div className="flex items-center justify-center gap-2">
-                            <ChipIcon color={chip.color} />
-                            <span className="whitespace-nowrap">
+                            <ChipIcon color={chip.color} className="h-3 w-3" />
+                            <span className="whitespace-nowrap text-xs">
                                 {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </span>
                             </div>
                         </TableHead>
                         ))}
+                        <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
                     {player.transactions.map((trans) => (
                         <TableRow key={trans.id}>
-                        <TableCell className="font-medium capitalize">
+                        <TableCell className="font-medium capitalize py-2">
                             {trans.type} #{trans.id}
                         </TableCell>
-                        <TableCell className="text-right font-mono">
+                        <TableCell className="text-right font-mono py-2">
                             {trans.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </TableCell>
                         {sortedChips.map((chip) => {
                             const tChip = trans.chips.find((c) => c.chipId === chip.id);
                             return (
-                            <TableCell key={chip.id} className="text-center font-mono">
+                            <TableCell key={chip.id} className="text-center font-mono py-2">
                                 {tChip?.count || 0}
                             </TableCell>
                             );
                         })}
+                        <TableCell className="text-center py-2">
+                            <div className="flex justify-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(trans)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteClick(trans.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </TableCell>
                         </TableRow>
                     ))}
                     </TableBody>
@@ -295,6 +336,7 @@ export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ player
                             {chip.count}
                         </TableCell>
                         ))}
+                        <TableCell />
                     </TableRow>
                     <TableRow className="bg-muted/80 hover:bg-muted font-bold">
                         <TableCell colSpan={2} className="text-right">
@@ -305,9 +347,11 @@ export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ player
                             .reduce((acc, t) => acc + t.amount, 0)
                             .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </TableCell>
+                        <TableCell />
                     </TableRow>
                     </UiTableFooter>
                 </Table>
+                </ScrollArea>
 
                 <Separator className="my-4" />
 
@@ -338,6 +382,26 @@ export const PlayerDetailsDialog: React.FC<PlayerDetailsDialogProps> = ({ player
             )}
             </DialogContent>
       </Dialog>
+      
+      {transactionToEdit && (
+         <ChipDistributionDialog
+            isOpen={!!transactionToEdit}
+            onOpenChange={(open) => !open && setTransactionToEdit(null)}
+            transactionDetails={{
+                type: 'edit',
+                playerName: player?.name,
+                amount: transactionToEdit.amount
+            }}
+            sortedChips={sortedChips}
+            initialChips={transactionToEdit.chips}
+            distributeChips={distributeChips}
+            onConfirm={(chips, val) => {
+                onUpdateTransaction(transactionToEdit.id, val, chips);
+                setTransactionToEdit(null);
+            }}
+         />
+      )}
+      </>
     )
 }
 

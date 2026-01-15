@@ -19,11 +19,22 @@ const generateId = () => {
 };
 
 const initialChips = [
-  { id: 1, value: 0.25, color: '#22c55e', name: 'Verde' },
-  { id: 2, value: 0.5, color: '#ef4444', name: 'Vermelha' },
-  { id: 3, value: 1, color: '#f5f5f5', name: 'Branca' },
-  { id: 4, value: 10, color: '#171717', name: 'Preta' },
+  { id: 1, value: 1, color: 'white', name: 'Branca' },
+  { id: 2, value: 5, color: 'red', name: 'Vermelha' },
+  { id: 3, value: 10, color: 'blue', name: 'Azul' },
+  { id: 4, value: 25, color: 'green', name: 'Verde' },
+  { id: 5, value: 50, color: 'turquoise', name: 'Turquesa' },
+  { id: 6, value: 100, color: 'black', name: 'Preta' },
 ];
+
+const initialInventory = {
+  white: 199,
+  red: 100,
+  blue: 50,
+  green: 50,
+  turquoise: 50,
+  black: 50,
+};
 
 export default function CashGameLandingPage() {
   const router = useRouter();
@@ -58,6 +69,7 @@ export default function CashGameLandingPage() {
         id: gameId,
         name: newGameName,
         chips: initialChips,
+        chipInventory: initialInventory,
         players: [],
         cashedOutPlayers: [],
         requests: [],
@@ -83,10 +95,10 @@ export default function CashGameLandingPage() {
       toast({ variant: 'destructive', title: 'Erro', description: 'Por favor, insira o ID da sala.' });
       return;
     }
-    if (!user || !firestore) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para entrar em uma sala.' });
-      return;
-    }
+    
+    // We only need firestore to be available
+    if (!firestore) return;
+
     setIsJoining(true);
     const gameId = joinGameId.toUpperCase();
 
@@ -97,6 +109,12 @@ export default function CashGameLandingPage() {
       if (docSnap.exists()) {
         const gameData = docSnap.data();
         
+        // If user is not logged in, they can only spectate
+        if (!user) {
+             router.push(`/cash-game/${gameId}`);
+             return;
+        }
+
         // Admin or game owner can join directly
         if (isAdmin || gameData.ownerId === user.uid) {
           router.push(`/cash-game/${gameId}`);

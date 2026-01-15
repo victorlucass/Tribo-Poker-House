@@ -39,107 +39,51 @@ import {
   SettlementDialog,
 } from './cash-game/dialogs';
 
-const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: number; count: number }[] => {
+const distributeChips = (buyIn: number, availableChips: Chip[], inventory: Record<string, number> = {}): { chipId: number; count: number }[] => {
   let remainingAmount = buyIn;
+  const distribution: { chipId: number; count: number }[] = [];
+  
+  // Create a copy of inventory to track usage during calculation without mutating original
+  const tempInventory = { ...inventory };
 
-  const chipsToUse =
-    buyIn > 50
-      ? availableChips.filter((c) => c.value === 1 || c.value === 10)
-      : buyIn <= 30
-      ? availableChips.filter((c) => c.value < 10)
-      : availableChips;
-
-  const sortedChips = [...chipsToUse].sort((a, b) => b.value - a.value);
-
-  if (sortedChips.length === 0) {
-    return [];
-  }
-
-  const distribution: Map<number, number> = new Map(sortedChips.map((c) => [c.id, 0]));
-
-  const smallChipsFirst = [...sortedChips].sort((a, b) => a.value - b.value).filter((c) => c.value < 1);
-  for (const chip of smallChipsFirst) {
-    const idealCount = Math.min(Math.floor((buyIn * 0.1) / chip.value), 4);
-    if (remainingAmount >= chip.value * idealCount) {
-      distribution.set(chip.id, (distribution.get(chip.id) || 0) + idealCount);
-      remainingAmount = parseFloat((remainingAmount - chip.value * idealCount).toFixed(2));
-    }
-  }
+  // Sort chips by value (High to Low)
+  const sortedChips = [...availableChips].sort((a, b) => b.value - a.value);
 
   for (const chip of sortedChips) {
     if (remainingAmount <= 0) break;
-    if (chip.value > remainingAmount) continue;
 
-    let allocationPercentage = 0;
-    if (chip.value >= 10) allocationPercentage = 0.5;
-    else if (chip.value >= 1) allocationPercentage = 0.4;
-    else allocationPercentage = 0.3;
-
-    let targetValueForChip = remainingAmount * allocationPercentage;
-
-    let count = Math.floor(targetValueForChip / chip.value);
-
-    if (chip.value < 1 && count > 5) {
-      count = Math.round(count / 5) * 5;
-    }
-
-    if (count > 0) {
-      const amountToDistribute = count * chip.value;
-      if (remainingAmount >= amountToDistribute) {
-        distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
-        remainingAmount = parseFloat((remainingAmount - amountToDistribute).toFixed(2));
+    const chipValue = chip.value;
+    const chipColor = chip.color; // Should match keys in inventory (e.g., 'white', 'red')
+    
+    // How many of this chip ideally?
+    const maxNeeded = Math.floor(remainingAmount / chipValue);
+    
+    // How many do we actually have?
+    // If inventory is missing or key doesn't exist, assume 0 (or infinite if we want fallback, but we want control)
+    // For safety, if inventory is empty (legacy games), treat as infinite or 999
+    const available = tempInventory[chipColor] !== undefined ? tempInventory[chipColor] : 9999;
+    
+    const countToTake = Math.min(maxNeeded, available);
+    
+    if (countToTake > 0) {
+      distribution.push({ chipId: chip.id, count: countToTake });
+      remainingAmount = parseFloat((remainingAmount - (countToTake * chipValue)).toFixed(2));
+      
+      // Update temp inventory
+      if (tempInventory[chipColor] !== undefined) {
+        tempInventory[chipColor] -= countToTake;
       }
     }
   }
 
-  for (const chip of sortedChips) {
-    if (remainingAmount < chip.value) continue;
-    const count = Math.floor(remainingAmount / chip.value);
-    if (count > 0) {
-      distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
-      remainingAmount = parseFloat((remainingAmount - count * chip.value).toFixed(2));
-    }
+  // Check if we failed to distribute everything
+  if (remainingAmount > 0) {
+      console.warn(`Could not distribute full amount. Remaining: ${remainingAmount}`);
+      // You might want to return an empty array or the partial distribution.
+      // Returning partial lets the user see what's missing.
   }
 
-  if (remainingAmount > 0.01) {
-    const smallestChips = [...sortedChips].sort((a, b) => a.value - b.value);
-    for (const chip of smallestChips) {
-      if (remainingAmount < chip.value) continue;
-      const count = Math.ceil(remainingAmount / chip.value);
-      if (count > 0) {
-        distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
-        remainingAmount = parseFloat((remainingAmount - count * chip.value).toFixed(2));
-      }
-    }
-  }
-
-  const finalDistribution = Array.from(distribution.entries()).map(([chipId, count]) => ({ chipId, count }));
-  const totalDistributedValue = finalDistribution.reduce((acc, dist) => {
-    const chip = availableChips.find((c) => c.id === dist.chipId);
-    return acc + (chip ? chip.value * dist.count : 0);
-  }, 0);
-
-  if (Math.abs(totalDistributedValue - buyIn) > 0.01) {
-    console.warn('Complex distribution failed. Falling back to greedy.', { totalDistributedValue, buyIn });
-    const greedyDistribution: { chipId: number; count: number }[] = [];
-    let greedyAmount = buyIn;
-    for (const chip of sortedChips) {
-      if (greedyAmount >= chip.value) {
-        const count = Math.floor(greedyAmount / chip.value);
-        greedyDistribution.push({ chipId: chip.id, count });
-        greedyAmount = parseFloat((greedyAmount - count * chip.value).toFixed(2));
-      }
-    }
-    if (Math.abs(greedyAmount) > 0.01) return [];
-    return greedyDistribution;
-  }
-
-  return availableChips
-    .map((chip) => ({
-      chipId: chip.id,
-      count: distribution.get(chip.id) || 0,
-    }))
-    .sort((a, b) => a.chipId - b.chipId);
+  return distribution.sort((a, b) => a.chipId - b.chipId);
 };
 
 interface CashGameManagerProps {
@@ -248,9 +192,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       return;
     }
 
-    const suggestedDistribution = distributeChips(amount, chips);
+    const suggestedDistribution = distributeChips(amount, chips, game?.chipInventory);
     if (suggestedDistribution.length === 0) {
-      toast({ variant: 'destructive', title: 'Erro na Distribuição', description: `Não foi possível distribuir R$${amount.toFixed(2)}.` });
+      toast({ variant: 'destructive', title: 'Erro na Distribuição', description: `Não foi possível distribuir R$${amount.toFixed(2)} com as fichas disponíveis.` });
       return;
     }
 
@@ -280,6 +224,15 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
     const currentGameData = gameDoc.data() as CashGame;
     const positionsSet = currentGameData.positionsSet;
 
+    // Calculate new inventory
+    const newInventory = { ...(currentGameData.chipInventory || {}) };
+    for (const item of chipDistribution) {
+        const chipDef = chips.find(c => c.id === item.chipId);
+        if (chipDef && newInventory[chipDef.color] !== undefined) {
+             newInventory[chipDef.color] -= item.count;
+        }
+    }
+
     let seat: number | undefined = undefined;
     if (positionsSet) {
         const occupiedSeats = new Set(currentGameData.players.map((p) => p.seat));
@@ -308,7 +261,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       if (positionsSet) {
         updatedPlayers.sort((a, b) => (a.seat || 99) - (b.seat || 99));
       }
-      updateGame({ players: updatedPlayers });
+      updateGame({ players: updatedPlayers, chipInventory: newInventory });
       toast({ title: 'Jogador Adicionado!', description: `${playerName} entrou na mesa com R$${amount.toFixed(2)}.` });
     } else if ((type === 'approve' && request) || type === 'admin-join') {
         const pId = type === 'admin-join' ? user.uid : request!.userId;
@@ -333,11 +286,12 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       
           updateGame({
               players: updatedPlayers,
-              requests: updatedRequests
+              requests: updatedRequests,
+              chipInventory: newInventory
           });
           toast({ title: 'Jogador Aprovado!', description: `${pName} entrou na mesa com R$${amount.toFixed(2)}.` });
         } else {
-          updateGame({ players: updatedPlayers });
+          updateGame({ players: updatedPlayers, chipInventory: newInventory });
           toast({ title: 'Você entrou no jogo!', description: `Você entrou na mesa com R$${amount.toFixed(2)}.` });
         }
     } else if (type === 'rebuy' && playerId) {
@@ -356,7 +310,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       const updatedPlayers = [...currentGameData.players];
       updatedPlayers[playerIndex] = updatedPlayer;
   
-      updateGame({ players: updatedPlayers });
+      updateGame({ players: updatedPlayers, chipInventory: newInventory });
       setPlayerForDetails(updatedPlayer);
       toast({ title: 'Transação Concluída!', description: `R$${amount.toFixed(2)} adicionado para ${playerName}.` });
     }
@@ -395,9 +349,20 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       totalInvested: totalInvested,
     };
 
+    // Return chips to inventory
+    const newInventory = { ...(game?.chipInventory || {}) };
+    chipCounts.forEach((count, chipId) => {
+        const chipDef = chips.find(c => c.id === chipId);
+        if (chipDef) {
+            const currentCount = newInventory[chipDef.color] || 0;
+            newInventory[chipDef.color] = currentCount + count;
+        }
+    });
+
     updateGame({
       cashedOutPlayers: [...cashedOutPlayers, newCashedOutPlayer],
       players: players.filter((p) => p.id !== playerToCashOut.id),
+      chipInventory: newInventory,
     });
 
     toast({
@@ -416,6 +381,88 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       router.push('/cash-game');
     }
   };
+
+  const handleUpdateTransaction = async (transactionId: number, newAmount: number, newChips: { chipId: number; count: number }[]) => {
+      if (!playerForDetails || !gameRef) return;
+      const gameDoc = await getDoc(gameRef);
+      if(!gameDoc.exists()) return;
+      const gameData = gameDoc.data() as CashGame;
+
+      const playerIndex = gameData.players.findIndex(p => p.id === playerForDetails.id);
+      if (playerIndex === -1) return;
+      const player = gameData.players[playerIndex];
+
+      const transIndex = player.transactions.findIndex(t => t.id === transactionId);
+      if (transIndex === -1) return;
+      const oldTrans = player.transactions[transIndex];
+
+      // Inventory adjustment
+      const newInventory = { ...(gameData.chipInventory || {}) };
+      
+      // 1. Return old chips
+      oldTrans.chips.forEach(c => {
+          const chipDef = chips.find(ch => ch.id === c.chipId);
+          if (chipDef) {
+              newInventory[chipDef.color] = (newInventory[chipDef.color] || 0) + c.count;
+          }
+      });
+
+      // 2. Take new chips
+      newChips.forEach(c => {
+          const chipDef = chips.find(ch => ch.id === c.chipId);
+          if (chipDef) {
+               newInventory[chipDef.color] = (newInventory[chipDef.color] || 0) - c.count;
+          }
+      });
+
+      // Update Transaction
+      const updatedTrans = { ...oldTrans, amount: newAmount, chips: newChips };
+      const updatedTransactions = [...player.transactions];
+      updatedTransactions[transIndex] = updatedTrans;
+
+      const updatedPlayer = { ...player, transactions: updatedTransactions };
+      const updatedPlayers = [...gameData.players];
+      updatedPlayers[playerIndex] = updatedPlayer;
+
+      updateGame({ players: updatedPlayers, chipInventory: newInventory });
+      setPlayerForDetails(updatedPlayer);
+      toast({ title: 'Transação Atualizada', description: 'Valores e estoque ajustados.' });
+  };
+
+  const handleDeleteTransaction = async (transactionId: number) => {
+      if (!playerForDetails || !gameRef) return;
+      const gameDoc = await getDoc(gameRef);
+      if(!gameDoc.exists()) return;
+      const gameData = gameDoc.data() as CashGame;
+
+      const playerIndex = gameData.players.findIndex(p => p.id === playerForDetails.id);
+      if (playerIndex === -1) return;
+      const player = gameData.players[playerIndex];
+
+      const transIndex = player.transactions.findIndex(t => t.id === transactionId);
+      if (transIndex === -1) return;
+      const oldTrans = player.transactions[transIndex];
+
+      // Inventory adjustment - Return chips
+      const newInventory = { ...(gameData.chipInventory || {}) };
+      oldTrans.chips.forEach(c => {
+          const chipDef = chips.find(ch => ch.id === c.chipId);
+          if (chipDef) {
+              newInventory[chipDef.color] = (newInventory[chipDef.color] || 0) + c.count;
+          }
+      });
+
+      // Remove Transaction
+      const updatedTransactions = player.transactions.filter(t => t.id !== transactionId);
+
+      const updatedPlayer = { ...player, transactions: updatedTransactions };
+      const updatedPlayers = [...gameData.players];
+      updatedPlayers[playerIndex] = updatedPlayer;
+
+      updateGame({ players: updatedPlayers, chipInventory: newInventory });
+      setPlayerForDetails(updatedPlayer);
+      toast({ title: 'Transação Removida', description: 'As fichas foram devolvidas à maleta.' });
+  }
 
   const handlePlayerChipCountChange = (playerId: string, chipId: number, count: number) => {
     const updatedPlayers = players.map((p) => {
@@ -596,6 +643,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               players={players}
               cashedOutPlayers={cashedOutPlayers}
               chips={chips}
+              chipInventory={game?.chipInventory}
               canManageGame={canManageGame}
               onUpdateChips={(updatedChips) => updateGame({ chips: updatedChips })}
               onSettlementClick={() => setIsSettlementOpen(true)}
@@ -632,6 +680,9 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
             sortedChips={sortedChips}
             onOpenChange={(isOpen) => !isOpen && setPlayerForDetails(null)}
             onRebuy={(amount) => handleOpenDistributionModal('rebuy', { playerId: playerForDetails.id, playerName: playerForDetails.name, amount })}
+            onUpdateTransaction={handleUpdateTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
+            distributeChips={(amount, availChips) => distributeChips(amount, availChips, game?.chipInventory)}
           />
       )}
 

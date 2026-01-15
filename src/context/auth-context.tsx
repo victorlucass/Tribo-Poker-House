@@ -50,7 +50,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [auth, toast, router]);
 
   useEffect(() => {
-    const isPublicPath = ['/login', '/signup'].includes(pathname);
+    const isPublicPath = ['/login', '/signup'].includes(pathname) || pathname.startsWith('/cash-game');
+    const isAuthPath = ['/login', '/signup'].includes(pathname);
 
     if (isUserLoading) {
       setLoading(true);
@@ -73,7 +74,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .then((docSnap) => {
           if (docSnap.exists()) {
             setUserProfile(docSnap.data() as UserProfile);
-            if (isPublicPath) {
+            if (isAuthPath) {
               router.push('/');
             }
             setLoading(false);

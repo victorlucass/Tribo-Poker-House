@@ -22,6 +22,7 @@ interface GameControlsProps {
   players: CashGamePlayer[];
   cashedOutPlayers: CashedOutPlayer[];
   chips: Chip[];
+  chipInventory?: Record<string, number>;
   canManageGame: boolean;
   onUpdateChips: (chips: Chip[]) => void;
   onSettlementClick: () => void;
@@ -31,6 +32,7 @@ const GameControls: React.FC<GameControlsProps> = ({
   players,
   cashedOutPlayers,
   chips,
+  chipInventory,
   canManageGame,
   onUpdateChips,
   onSettlementClick,
@@ -119,121 +121,36 @@ const GameControls: React.FC<GameControlsProps> = ({
 
       {canManageGame && (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Palette /> Fichas do Jogo
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {sortedChips.map((chip) => (
-                  <div key={chip.id} className="flex items-center gap-2">
-                    <ChipIcon color={chip.color} />
-                    <Input
-                      type="text"
-                      value={chip.name}
-                      onChange={(e) => {
-                        const updatedChips = chips.map((c) =>
-                          c.id === chip.id ? { ...c, name: e.target.value } : c
+           {chipInventory && (
+            <Card>
+                <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Palette /> Maleta de Fichas
+                </CardTitle>
+                <CardDescription>Estoque atual de fichas na banca.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                <div className="space-y-3">
+                    {sortedChips.map((chip) => {
+                        const count = chipInventory[chip.color] ?? 0;
+                        return (
+                            <div key={chip.id} className="flex justify-between items-center text-sm">
+                                <div className="flex items-center gap-2">
+                                    <ChipIcon color={chip.color} />
+                                    <span>{chip.name} ({chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span>
+                                </div>
+                                <span className={cn("font-mono font-bold", count === 0 ? "text-red-500" : "text-foreground")}>
+                                    {count}x
+                                </span>
+                            </div>
                         );
-                        onUpdateChips(updatedChips);
-                      }}
-                      className="w-24 flex-1"
-                    />
-                    <div className="flex items-center">
-                      <span className="mr-2 text-sm">R$</span>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        value={chip.value}
-                        onChange={(e) => {
-                          const updatedChips = chips.map((c) =>
-                            c.id === chip.id ? { ...c, value: parseFloat(e.target.value) || 0 } : c
-                          );
-                          onUpdateChips(updatedChips);
-                        }}
-                        className="w-20"
-                      />
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveChip(chip.id)}
-                      disabled={players.length > 0 || cashedOutPlayers.length > 0}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-500/80" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-            <CardFooter className="flex-col gap-2">
-              <Dialog open={isAddChipOpen} onOpenChange={setIsAddChipOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full">
-                    Adicionar Ficha
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Adicionar Nova Ficha</DialogTitle>
-                    <DialogDescription>Defina as propriedades da nova ficha para o jogo.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="chip-name" className="text-right">
-                        Nome
-                      </Label>
-                      <Input
-                        id="chip-name"
-                        value={newChip.name}
-                        onChange={(e) => setNewChip({ ...newChip, name: e.target.value })}
-                        className="col-span-3"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="chip-value" className="text-right">
-                        Valor (R$)
-                      </Label>
-                      <Input
-                        id="chip-value"
-                        type="number"
-                        inputMode="decimal"
-                        value={newChip.value}
-                        onChange={(e) => setNewChip({ ...newChip, value: e.target.value })}
-                        className="col-span-3"
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="chip-color" className="text-right">
-                        Cor
-                      </Label>
-                      <Input
-                        id="chip-color"
-                        type="color"
-                        value={newChip.color}
-                        onChange={(e) => setNewChip({ ...newChip, color: e.target.value })}
-                        className="col-span-3 h-10 p-1"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={handleAddChip}>Salvar Ficha</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <Button
-                variant="ghost"
-                className="w-full"
-                onClick={handleResetChips}
-                disabled={players.length > 0 || cashedOutPlayers.length > 0}
-              >
-                Resetar Fichas
-              </Button>
-            </CardFooter>
-          </Card>
+                    })}
+                </div>
+                </CardContent>
+            </Card>
+           )}
+
+
 
           <Card>
             <CardHeader>

@@ -34,7 +34,8 @@ service cloud.firestore {
 
     // Cash Games
     match /cashGames/{gameId} {
-      allow get, list: if isSignedIn();
+      allow get: if true;
+      allow list: if isSignedIn();
       allow create: if isAdmin();
       allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
 

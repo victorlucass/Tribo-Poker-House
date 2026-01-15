@@ -65,6 +65,8 @@ export interface HandState {
 
 
 // Tipos para Cash Game
+export type ChipColor = 'white' | 'red' | 'blue' | 'green' | 'turquoise' | 'black';
+
 export interface CashGameChip {
     id: number;
     value: number;
@@ -111,6 +113,7 @@ export interface CashGame {
     ownerId: string; // ID of the user who created the game
     name: string;
     chips: CashGameChip[];
+    chipInventory: Record<ChipColor, number>;
     players: CashGamePlayer[];
     cashedOutPlayers: CashedOutPlayer[];
     requests: JoinRequest[];
