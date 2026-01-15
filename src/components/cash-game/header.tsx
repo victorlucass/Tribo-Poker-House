@@ -3,8 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Copy, LogOut, Wallet, Dices } from 'lucide-react';
+import { ArrowLeft, Copy, LogIn, Wallet, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/auth-context';
 
 interface CashGameHeaderProps {
   gameName?: string;
@@ -20,10 +21,10 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
   gameId,
   isClient,
   currentUserIsPlayer,
-  canManageGame,
   onLogoutClick,
 }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const copyGameId = () => {
     if (isClient) {
@@ -51,14 +52,6 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {canManageGame && (
-            <Button variant="primary" asChild>
-              <Link href={`/cash-game/${gameId}/dealer`}>
-                <Dices className="mr-2 h-4 w-4" />
-                Modo Croupier
-              </Link>
-            </Button>
-        )}
         {currentUserIsPlayer && (
             <Button variant="secondary" asChild>
               <Link href={`/cash-game/${gameId}/my-situation`}>
@@ -67,13 +60,24 @@ const CashGameHeader: React.FC<CashGameHeaderProps> = ({
               </Link>
             </Button>
         )}
-        <Button variant="outline" onClick={onLogoutClick} size="sm" className="shrink-0">
-          <LogOut className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Sair</span>
-        </Button>
+        {user ? (
+            <Button variant="outline" onClick={onLogoutClick} size="sm" className="shrink-0">
+              <LogOut className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Sair</span>
+            </Button>
+        ) : (
+            <Button asChild variant="outline" size="sm" className="shrink-0">
+                <Link href="/login">
+                    <LogIn className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Login</span>
+                </Link>
+            </Button>
+        )}
       </div>
     </header>
   );
 };
 
 export default CashGameHeader;
+
+    

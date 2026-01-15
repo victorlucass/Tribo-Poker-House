@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, setDoc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, arrayUnion } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, LogIn, LogOut, PlusCircle } from 'lucide-react';
+import { ArrowLeft, LogIn, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import type { JoinRequest } from '@/lib/types';
@@ -40,7 +40,7 @@ export default function CashGameLandingPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { user, isAdmin, handleLogout } = useAuth();
+  const { user, isAdmin, firebaseUser } = useAuth();
   const [newGameName, setNewGameName] = useState('');
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -52,7 +52,7 @@ export default function CashGameLandingPage() {
       return;
     }
     if (!user || !firestore) {
-      toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para criar uma sala.' });
+      toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado como admin para criar uma sala.' });
       return;
     }
     if (!isAdmin) {
@@ -111,8 +111,8 @@ export default function CashGameLandingPage() {
         
         // If user is not logged in, they can only spectate
         if (!user) {
-             router.push(`/cash-game/${gameId}`);
-             return;
+          router.push(`/cash-game/${gameId}`);
+          return;
         }
 
         // Admin or game owner can join directly
@@ -126,19 +126,19 @@ export default function CashGameLandingPage() {
         const existingRequest = gameData.requests.find((r: any) => r.userId === user.uid);
 
         if (isPlayer || hasCashedOut) {
-           router.push(`/cash-game/${gameId}`);
-           return;
+          router.push(`/cash-game/${gameId}`);
+          return;
         }
 
         if (existingRequest) {
-            if(existingRequest.status === 'declined') {
-                toast({ variant: 'destructive', title: 'Solicitação Recusada', description: 'Seu pedido para entrar na sala foi recusado pelo administrador.' });
-                setIsJoining(false);
-                return;
-            }
-            // If pending or approved, let them in to spectate or play
-            router.push(`/cash-game/${gameId}`);
+          if(existingRequest.status === 'declined') {
+            toast({ variant: 'destructive', title: 'Solicitação Recusada', description: 'Seu pedido para entrar na sala foi recusado pelo administrador.' });
+            setIsJoining(false);
             return;
+          }
+          // If pending or approved, let them in to spectate or play
+          router.push(`/cash-game/${gameId}`);
+          return;
         }
 
         // No request exists, create a new one
@@ -155,7 +155,6 @@ export default function CashGameLandingPage() {
 
         toast({ title: 'Solicitação Enviada!', description: 'Seu pedido para entrar na sala foi enviado. Você será redirecionado.' });
         router.push(`/cash-game/${gameId}`);
-
       } else {
         toast({ variant: 'destructive', title: 'Sala não encontrada', description: 'Nenhuma sala encontrada com este ID. Verifique o código e tente novamente.' });
       }
@@ -176,14 +175,9 @@ export default function CashGameLandingPage() {
           </Link>
         </Button>
       </div>
-      <div className="absolute top-4 right-4 sm:top-8 sm:right-8">
-        <Button variant="outline" onClick={handleLogout} size="sm">
-          <LogOut className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Sair</span>
-        </Button>
-      </div>
+     
       <div className="w-full max-w-md space-y-8">
-        {isAdmin && (
+        {isAdmin && user && (
             <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-accent">
@@ -219,15 +213,18 @@ export default function CashGameLandingPage() {
               className="uppercase tracking-widest text-center font-mono"
             />
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex-col gap-4">
             <Button variant="secondary" className="w-full" onClick={handleJoinGame} disabled={isJoining}>
-              {isJoining ? 'Processando...' : 'Entrar ou Solicitar'}
+              {isJoining ? 'Entrando...' : 'Entrar na Sala'}
             </Button>
+            {!user && (
+                 <Button variant="link" asChild>
+                    <Link href="/login">Fazer login para criar ou gerenciar salas</Link>
+                </Button>
+            )}
           </CardFooter>
         </Card>
       </div>
     </div>
   );
 }
-
-    

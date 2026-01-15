@@ -27,43 +27,6 @@ export interface Card {
   rank: Rank;
 }
 
-// Tipos para Estado da Mão (Hand State)
-export type GamePhase = 'PRE_DEAL' | 'PRE_FLOP' | 'FLOP' | 'TURN' | 'RIVER' | 'SHOWDOWN';
-
-export interface PlayerHandState {
-    id: string; // Player ID
-    name: string;
-    seat: number;
-    stack: number; // Stack at the beginning of the hand
-    bet: number; // Current bet in this round
-    card1?: Card;
-    card2?: Card;
-    hasActed: boolean;
-    isFolded: boolean;
-    isAllIn: boolean;
-}
-
-export interface Pot {
-    amount: number;
-    eligiblePlayerIds: string[];
-}
-
-
-export interface HandState {
-    phase: GamePhase;
-    pots: Pot[];
-    communityCards: Card[];
-    deck?: Card[]; // Keep track of the deck to deal cards
-    activePlayerId: string | null;
-    lastRaise: number;
-    smallBlindAmount: number;
-    bigBlindAmount: number;
-    smallBlindPlayerId?: string | null;
-    bigBlindPlayerId?: string | null;
-    players: PlayerHandState[];
-}
-
-
 // Tipos para Cash Game
 export type ChipColor = 'white' | 'red' | 'blue' | 'green' | 'turquoise' | 'black';
 
@@ -121,7 +84,6 @@ export interface CashGame {
     dealerId: string | null;
     croupierId?: string | null; // UID of the admin currently acting as croupier
     createdAt: string; // Store as ISO string
-    handState?: HandState; // Optional HandState object
 }
 
 export interface UserProfile {
@@ -131,3 +93,5 @@ export interface UserProfile {
   email: string;
   role: 'admin' | 'player' | 'super_admin';
 }
+
+    
