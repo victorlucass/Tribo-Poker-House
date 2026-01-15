@@ -12,7 +12,7 @@ import type {
 } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { History, LogOut, Maximize } from 'lucide-react';
+import { History, LogIn, Maximize } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
@@ -491,6 +491,23 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
           onLogoutClick={handleLogout}
         />
         
+        {!user && (
+            <Card className="mb-8">
+                <CardHeader className="flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>Você está como espectador</CardTitle>
+                        <CardDescription>Faça login para interagir com a sala.</CardDescription>
+                    </div>
+                    <Button asChild>
+                        <Link href="/login">
+                            <LogIn className="mr-2"/>
+                            Fazer Login
+                        </Link>
+                    </Button>
+                </CardHeader>
+            </Card>
+        )}
+        
         <SpectatorView currentUserStatus={currentUserStatus} />
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -527,18 +544,16 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
               </Card>
             )}
 
-            {(currentUserStatus === 'player' || currentUserStatus === 'spectator' || canManageGame) && (
-              <PlayerList 
-                players={players}
-                sortedChips={sortedChips}
-                canManageGame={canManageGame}
-                positionsSet={game.positionsSet}
-                onStartDealing={handleStartDealing}
-                onPlayerDetailsClick={setPlayerForDetails}
-                onCashOutClick={(player) => { setPlayerToCashOut(player); setIsCashOutOpen(true); }}
-                onRemovePlayer={removePlayer}
-              />
-            )}
+            <PlayerList 
+              players={players}
+              sortedChips={sortedChips}
+              canManageGame={canManageGame}
+              positionsSet={game.positionsSet}
+              onStartDealing={handleStartDealing}
+              onPlayerDetailsClick={setPlayerForDetails}
+              onCashOutClick={(player) => { setPlayerToCashOut(player); setIsCashOutOpen(true); }}
+              onRemovePlayer={removePlayer}
+            />
             
             {cashedOutPlayers.length > 0 && (
               <Card>

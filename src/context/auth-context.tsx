@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { useUser as useFirebaseUser, useFirestore, useAuth as useFirebaseAuth } from '@/firebase';
 import type { UserProfile } from '@/lib/types';
 import { doc, getDoc } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { signOut, signInAnonymously, User } from 'firebase/auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -12,6 +12,7 @@ import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 interface AuthContextType {
   user: UserProfile | null;
+  firebaseUser: User | null;
   loading: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -42,29 +43,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
 
   const handleLogout = useCallback(() => {
+    if (!auth) return;
     signOut(auth).then(() => {
       setUserProfile(null);
-      router.push('/login'); // Force redirect after state is cleared
+      // After signing out, sign in anonymously to maintain access
+      signInAnonymously(auth);
       toast({ title: 'Logout efetuado com sucesso.' });
     });
-  }, [auth, toast, router]);
+  }, [auth, toast]);
 
   useEffect(() => {
-    const isPublicPath = ['/login', '/signup'].includes(pathname);
-
     if (isUserLoading) {
       setLoading(true);
       return;
     }
 
     if (!firebaseUser) {
-      setUserProfile(null);
-      if (!isPublicPath) {
-        router.push('/login');
-      } else {
+        // This should ideally not happen if anonymous auth is working
+        if(auth) signInAnonymously(auth);
         setLoading(false);
-      }
-      return;
+        return;
+    }
+    
+    if (firebaseUser.isAnonymous) {
+        setUserProfile(null);
+        setLoading(false);
+        return;
     }
     
     if (firestore) {
@@ -73,13 +77,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .then((docSnap) => {
           if (docSnap.exists()) {
             setUserProfile(docSnap.data() as UserProfile);
-            if (isPublicPath) {
-              router.push('/');
-            }
             setLoading(false);
           } else {
-            // Profile doesn't exist, so let's create it.
-            // This handles the race condition during signup.
             let name = firebaseUser.displayName || 'Novo Usuário';
             let nickname = firebaseUser.email?.split('@')[0] || `user_${firebaseUser.uid.substring(0, 5)}`;
             
@@ -89,7 +88,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     const profileData = JSON.parse(pendingProfile);
                     name = profileData.name;
                     nickname = profileData.nickname;
-                    sessionStorage.removeItem('pendingUserProfile'); // Clean up
+                    sessionStorage.removeItem('pendingUserProfile');
                 }
             } catch (e) {
                 console.error("Could not parse sessionStorage data:", e);
@@ -107,11 +106,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             };
             
             setDocumentNonBlocking(userDocRef, newProfile, {});
-            setUserProfile(newProfile); // Optimistically set the profile
-
+            setUserProfile(newProfile);
             toast({ title: 'Bem-vindo!', description: 'Seu perfil foi criado.' });
             
-            if (isPublicPath) {
+            if (['/login', '/signup'].includes(pathname)) {
                 router.push('/');
             }
             setLoading(false);
@@ -124,7 +122,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
     }
 
-  }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout, toast]);
+  }, [firebaseUser, isUserLoading, firestore, pathname, router, handleLogout, toast, auth]);
 
 
   const isSuperAdmin = !!userProfile && userProfile.role === 'super_admin';
@@ -132,6 +130,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const contextValue = {
     user: userProfile,
+    firebaseUser,
     loading,
     isAdmin,
     isSuperAdmin,

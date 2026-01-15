@@ -7,6 +7,14 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
+    
+    function isAnonymous() {
+      return request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+    
+    function isAuthenticated() {
+      return isSignedIn() && !isAnonymous();
+    }
 
     function isOwner(userId) {
       return request.auth.uid == userId;
@@ -17,54 +25,58 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return getRole(request.auth.uid) == 'admin' || isSuperAdmin();
+      return isAuthenticated() && (getRole(request.auth.uid) == 'admin' || isSuperAdmin());
     }
     
     function isSuperAdmin() {
-        return getRole(request.auth.uid) == 'super_admin';
+      return isAuthenticated() && getRole(request.auth.uid) == 'super_admin';
     }
 
     // User Profiles
     match /users/{userId} {
-      allow create: if isOwner(userId);
-      allow get: if isOwner(userId) || isAdmin();
+      // Only an authenticated user can create their own profile
+      allow create: if isAuthenticated() && isOwner(userId);
+      // Only owner or admin can get a profile
+      allow get: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      // Only admins can list users
       allow list: if isAdmin();
-      allow update: if isOwner(userId) || isSuperAdmin();
+      // Only owner or super admin can update
+      allow update: if isAuthenticated() && (isOwner(userId) || isSuperAdmin());
     }
 
     // Cash Games
     match /cashGames/{gameId} {
-      allow get, list: if isSignedIn();
+      // Everyone can read cash game data
+      allow get, list: if true;
+      // Only admins can create games
       allow create: if isAdmin();
+      // Game owner or admin can delete
       allow delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
 
       // Update Rules:
-      // - The game owner or an admin can update anything (including designating the dealer).
-      // - The designated dealer can update the 'handState'.
-      // - Any signed-in user can update 'requests' to join.
       allow update: if isSignedIn() && 
                     (
-                      // Allow owner or admin to manage the game fully
+                      // Game owner or admin can manage the game fully
                       (resource.data.ownerId == request.auth.uid || isAdmin()) ||
-                      // Allow the dealer to update the hand state
-                      (request.auth.uid == resource.data.ownerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handState'])) ||
-                       // Allow anyone to request to join
+                      // The designated dealer (croupier) can update the handState
+                      (request.auth.uid == resource.data.croupierId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['handState'])) ||
+                       // Any signed-in user (including anonymous) can request to join
                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requests']))
                     );
     }
 
-    // Tournaments (Read-only for now)
+    // Tournaments (Read-only for now for everyone)
     match /tournaments/{tournamentId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if true;
       allow create, update, delete: if false;
 
       match /rounds/{roundId} {
-        allow get, list: if isSignedIn();
+        allow get, list: if true;
         allow create, update, delete: if false;
       }
 
       match /payoutStructures/{payoutStructureId} {
-        allow get, list: if isSignedIn();
+        allow get, list: if true;
         allow create, update, delete: if false;
       }
     }

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Zap, Users, LogOut, ShieldCheck } from 'lucide-react';
+import { Zap, Users, LogOut, ShieldCheck, LogIn } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 
 export default function Home() {
@@ -12,22 +12,35 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8">
       <div className="absolute top-4 right-4 flex flex-col items-end gap-2 sm:flex-row sm:top-8 sm:right-8">
-        {isSuperAdmin && (
-          <Button asChild variant="secondary" size="sm">
-            <Link href="/admin">
-              <ShieldCheck className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Admin</span>
-            </Link>
-          </Button>
+        {user ? (
+            <>
+                {isSuperAdmin && (
+                <Button asChild variant="secondary" size="sm">
+                    <Link href="/admin">
+                    <ShieldCheck className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Admin</span>
+                    </Link>
+                </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Sair</span>
+                </Button>
+            </>
+        ) : (
+             <Button asChild variant="outline" size="sm">
+                <Link href="/login">
+                  <LogIn className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Login</span>
+                </Link>
+              </Button>
         )}
-        <Button variant="outline" size="sm" onClick={handleLogout}>
-          <LogOut className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Sair</span>
-        </Button>
       </div>
       <div className="text-center mb-12">
         <h1 className="font-headline text-5xl font-bold text-accent">Tribo Poker House</h1>
-        <p className="text-muted-foreground mt-2 text-lg">Bem-vindo, {user?.nickname}! Sua ferramenta completa para noites de poker.</p>
+        <p className="text-muted-foreground mt-2 text-lg">
+            {user ? `Bem-vindo, ${user.nickname}!` : 'Sua ferramenta completa para noites de poker.'}
+        </p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
         <Link href="/tournament" passHref>
