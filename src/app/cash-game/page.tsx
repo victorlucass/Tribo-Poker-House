@@ -19,10 +19,10 @@ const generateId = () => {
 };
 
 const initialChips = [
-  { id: 1, value: 0.25, color: '#22c55e', name: 'Verde' },
-  { id: 2, value: 0.5, color: '#ef4444', name: 'Vermelha' },
-  { id: 3, value: 1, color: '#f5f5f5', name: 'Branca' },
-  { id: 4, value: 10, color: '#171717', name: 'Preta' },
+  { id: 1, value: 0.25, color: '#22c55e', name: 'Verde', totalQuantity: 150 },
+  { id: 2, value: 0.5, color: '#ef4444', name: 'Vermelha', totalQuantity: 100 },
+  { id: 3, value: 1, color: '#f5f5f5', name: 'Branca', totalQuantity: 50 },
+  { id: 4, value: 10, color: '#171717', name: 'Preta', totalQuantity: 50 },
 ];
 
 export default function CashGameLandingPage() {

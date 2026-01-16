@@ -110,25 +110,30 @@ interface ChipDistributionDialogProps {
     onOpenChange: (isOpen: boolean) => void;
     transactionDetails: { type: string, playerName?: string, amount: number, chipMap?: Map<number, number> };
     sortedChips: CashGameChip[];
+    bankChipCounts: Map<number, number>;
     onConfirm: (chipDistribution: { chipId: number; count: number }[], distributedValue: number) => void;
-    distributeChips: (amount: number, chips: CashGameChip[]) => {chipId: number, count: number}[];
+    distributeChips: (amount: number, chips: CashGameChip[], bankChipCounts: Map<number, number>) => {chipId: number, count: number}[];
 }
 
-export const ChipDistributionDialog: React.FC<ChipDistributionDialogProps> = ({ isOpen, onOpenChange, transactionDetails, sortedChips, onConfirm, distributeChips }) => {
+export const ChipDistributionDialog: React.FC<ChipDistributionDialogProps> = ({ isOpen, onOpenChange, transactionDetails, sortedChips, bankChipCounts, onConfirm, distributeChips }) => {
     const [manualChipCounts, setManualChipCounts] = useState<Map<number, number>>(new Map());
 
     useEffect(() => {
         if (transactionDetails?.amount && sortedChips.length > 0) {
-            const suggestedDistribution = distributeChips(transactionDetails.amount, sortedChips);
+            const suggestedDistribution = distributeChips(transactionDetails.amount, sortedChips, bankChipCounts);
             const chipMap = new Map<number, number>();
             suggestedDistribution.forEach(c => chipMap.set(c.chipId, c.count));
             setManualChipCounts(chipMap);
         }
-    }, [transactionDetails, sortedChips, distributeChips]);
+    }, [transactionDetails, sortedChips, distributeChips, bankChipCounts]);
 
 
     const handleChipCountChange = (chipId: number, countStr: string) => {
-        const count = parseInt(countStr) || 0;
+        const available = bankChipCounts.get(chipId) || 0;
+        let count = parseInt(countStr) || 0;
+        if (count > available) {
+            count = available;
+        }
         setManualChipCounts((prev) => new Map(prev).set(chipId, count));
     };
 
@@ -158,24 +163,30 @@ export const ChipDistributionDialog: React.FC<ChipDistributionDialogProps> = ({ 
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-                {sortedChips.map((chip) => (
-                <div key={chip.id} className="grid grid-cols-3 items-center gap-4">
-                    <Label htmlFor={`dist-chip-${chip.id}`} className="text-right flex items-center justify-end gap-2">
-                    <ChipIcon color={chip.color} />
-                    Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </Label>
-                    <Input
-                    id={`dist-chip-${chip.id}`}
-                    type="number"
-                    inputMode="decimal"
-                    className="col-span-2"
-                    min="0"
-                    placeholder="Quantidade"
-                    value={manualChipCounts.get(chip.id) || ''}
-                    onChange={(e) => handleChipCountChange(chip.id, e.target.value)}
-                    />
-                </div>
-                ))}
+                {sortedChips.map((chip) => {
+                    const availableCount = bankChipCounts.get(chip.id) || 0;
+                    return(
+                        <div key={chip.id} className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor={`dist-chip-${chip.id}`} className="text-right flex items-center justify-end gap-2">
+                                <ChipIcon color={chip.color} />
+                                Fichas de {chip.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </Label>
+                            <div className="col-span-2 grid grid-cols-2 gap-2 items-center">
+                                <Input
+                                id={`dist-chip-${chip.id}`}
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                max={availableCount}
+                                placeholder="Quantidade"
+                                value={manualChipCounts.get(chip.id) || ''}
+                                onChange={(e) => handleChipCountChange(chip.id, e.target.value)}
+                                />
+                                <span className="text-xs text-muted-foreground">({availableCount} disponíveis)</span>
+                            </div>
+                        </div>
+                    )
+                })}
                 <Separator />
                 <div className="flex justify-between items-center text-lg font-bold">
                 <Label>Valor Distribuído:</Label>
@@ -707,7 +718,7 @@ export const SettlementDialog: React.FC<SettlementDialogProps> = ({ isOpen, onOp
                     })}
                 </span>{' '}
                 (+
-                {croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}{' '}
+                {croupierTipsValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 Gorjeta) (+
                 {rakeValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} Rake)
                 <br />

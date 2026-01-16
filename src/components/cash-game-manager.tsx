@@ -39,107 +39,58 @@ import {
   SettlementDialog,
 } from './cash-game/dialogs';
 
-const distributeChips = (buyIn: number, availableChips: Chip[]): { chipId: number; count: number }[] => {
+const distributeChips = (buyIn: number, availableChips: Chip[], bankChipCounts: Map<number, number>): { chipId: number; count: number }[] => {
   let remainingAmount = buyIn;
 
-  const chipsToUse =
-    buyIn > 50
-      ? availableChips.filter((c) => c.value === 1 || c.value === 10)
-      : buyIn <= 30
-      ? availableChips.filter((c) => c.value < 10)
-      : availableChips;
+  const sortedChips = [...availableChips].sort((a, b) => b.value - a.value);
+  if (sortedChips.length === 0) return [];
 
-  const sortedChips = [...chipsToUse].sort((a, b) => b.value - a.value);
-
-  if (sortedChips.length === 0) {
-    return [];
-  }
-
-  const distribution: Map<number, number> = new Map(sortedChips.map((c) => [c.id, 0]));
-
-  const smallChipsFirst = [...sortedChips].sort((a, b) => a.value - b.value).filter((c) => c.value < 1);
-  for (const chip of smallChipsFirst) {
-    const idealCount = Math.min(Math.floor((buyIn * 0.1) / chip.value), 4);
-    if (remainingAmount >= chip.value * idealCount) {
-      distribution.set(chip.id, (distribution.get(chip.id) || 0) + idealCount);
-      remainingAmount = parseFloat((remainingAmount - chip.value * idealCount).toFixed(2));
-    }
-  }
+  const distribution: Map<number, number> = new Map();
 
   for (const chip of sortedChips) {
-    if (remainingAmount <= 0) break;
-    if (chip.value > remainingAmount) continue;
+      if (remainingAmount <= 0) break;
+      const availableCount = bankChipCounts.get(chip.id) || 0;
+      if (availableCount === 0 || chip.value > remainingAmount) continue;
 
-    let allocationPercentage = 0;
-    if (chip.value >= 10) allocationPercentage = 0.5;
-    else if (chip.value >= 1) allocationPercentage = 0.4;
-    else allocationPercentage = 0.3;
+      const countToTake = Math.min(Math.floor(remainingAmount / chip.value), availableCount);
 
-    let targetValueForChip = remainingAmount * allocationPercentage;
-
-    let count = Math.floor(targetValueForChip / chip.value);
-
-    if (chip.value < 1 && count > 5) {
-      count = Math.round(count / 5) * 5;
-    }
-
-    if (count > 0) {
-      const amountToDistribute = count * chip.value;
-      if (remainingAmount >= amountToDistribute) {
-        distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
-        remainingAmount = parseFloat((remainingAmount - amountToDistribute).toFixed(2));
+      if (countToTake > 0) {
+          distribution.set(chip.id, (distribution.get(chip.id) || 0) + countToTake);
+          remainingAmount = parseFloat((remainingAmount - countToTake * chip.value).toFixed(2));
       }
-    }
   }
 
-  for (const chip of sortedChips) {
-    if (remainingAmount < chip.value) continue;
-    const count = Math.floor(remainingAmount / chip.value);
-    if (count > 0) {
-      distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
-      remainingAmount = parseFloat((remainingAmount - count * chip.value).toFixed(2));
-    }
-  }
-
+  // If there's a small remainder, try to fill it with the smallest chips
   if (remainingAmount > 0.01) {
-    const smallestChips = [...sortedChips].sort((a, b) => a.value - b.value);
+    const smallestChips = sortedChips.sort((a, b) => a.value - b.value);
     for (const chip of smallestChips) {
-      if (remainingAmount < chip.value) continue;
-      const count = Math.ceil(remainingAmount / chip.value);
-      if (count > 0) {
-        distribution.set(chip.id, (distribution.get(chip.id) || 0) + count);
-        remainingAmount = parseFloat((remainingAmount - count * chip.value).toFixed(2));
+      const availableCount = (bankChipCounts.get(chip.id) || 0) - (distribution.get(chip.id) || 0);
+      if (availableCount > 0 && remainingAmount >= chip.value) {
+        const countToTake = Math.min(Math.floor(remainingAmount / chip.value), availableCount);
+         if (countToTake > 0) {
+            distribution.set(chip.id, (distribution.get(chip.id) || 0) + countToTake);
+            remainingAmount = parseFloat((remainingAmount - countToTake * chip.value).toFixed(2));
+         }
       }
     }
   }
-
+  
   const finalDistribution = Array.from(distribution.entries()).map(([chipId, count]) => ({ chipId, count }));
   const totalDistributedValue = finalDistribution.reduce((acc, dist) => {
     const chip = availableChips.find((c) => c.id === dist.chipId);
     return acc + (chip ? chip.value * dist.count : 0);
   }, 0);
 
-  if (Math.abs(totalDistributedValue - buyIn) > 0.01) {
-    console.warn('Complex distribution failed. Falling back to greedy.', { totalDistributedValue, buyIn });
-    const greedyDistribution: { chipId: number; count: number }[] = [];
-    let greedyAmount = buyIn;
-    for (const chip of sortedChips) {
-      if (greedyAmount >= chip.value) {
-        const count = Math.floor(greedyAmount / chip.value);
-        greedyDistribution.push({ chipId: chip.id, count });
-        greedyAmount = parseFloat((greedyAmount - count * chip.value).toFixed(2));
-      }
-    }
-    if (Math.abs(greedyAmount) > 0.01) return [];
-    return greedyDistribution;
-  }
 
-  return availableChips
-    .map((chip) => ({
+  if (Math.abs(buyIn - totalDistributedValue) > 0.01) {
+    console.warn("Distribution failed to match buy-in amount", {buyIn, totalDistributedValue});
+    return [];
+  }
+  
+  return availableChips.map(chip => ({
       chipId: chip.id,
       count: distribution.get(chip.id) || 0,
-    }))
-    .sort((a, b) => a.chipId - b.chipId);
+  })).sort((a, b) => a.chipId - b.chipId);
 };
 
 interface CashGameManagerProps {
@@ -174,6 +125,28 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
   const players = game?.players ?? [];
   const cashedOutPlayers = game?.cashedOutPlayers ?? [];
   const requests = game?.requests ?? [];
+
+  const bankChipCounts = useMemo(() => {
+    const counts = new Map<number, number>();
+    if (!game) return counts;
+
+    // Initialize with total quantities from the "case"
+    game.chips.forEach(chip => {
+      counts.set(chip.id, chip.totalQuantity);
+    });
+
+    // Subtract chips currently with players
+    game.players.forEach(player => {
+      player.transactions.forEach(transaction => {
+        transaction.chips.forEach(chipInTransaction => {
+          const currentCount = counts.get(chipInTransaction.chipId) || 0;
+          counts.set(chipInTransaction.chipId, currentCount - chipInTransaction.count);
+        });
+      });
+    });
+
+    return counts;
+  }, [game]);
 
   const currentUserIsPlayer = useMemo(() => {
     if (!user || !game) return false;
@@ -247,9 +220,13 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
       return;
     }
 
-    const suggestedDistribution = distributeChips(amount, chips);
+    const suggestedDistribution = distributeChips(amount, chips, bankChipCounts);
     if (suggestedDistribution.length === 0) {
-      toast({ variant: 'destructive', title: 'Erro na Distribuição', description: `Não foi possível distribuir R$${amount.toFixed(2)}.` });
+      toast({ 
+          variant: 'destructive', 
+          title: 'Fichas Insuficientes na Banca', 
+          description: `Não foi possível distribuir R$${amount.toFixed(2)} com as fichas disponíveis. Verifique a banca.` 
+      });
       return;
     }
 
@@ -626,6 +603,7 @@ const CashGameManager: React.FC<CashGameManagerProps> = ({ gameId }) => {
             onOpenChange={setIsDistributionModalOpen}
             transactionDetails={transactionDetails}
             sortedChips={sortedChips}
+            bankChipCounts={bankChipCounts}
             onConfirm={confirmTransaction}
             distributeChips={distributeChips}
           />

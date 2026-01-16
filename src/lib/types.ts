@@ -33,6 +33,7 @@ export interface CashGameChip {
     value: number;
     color: string;
     name: string;
+    totalQuantity: number;
 }
 
 export interface CashGamePlayer {
@@ -90,5 +91,3 @@ export interface UserProfile {
   email: string;
   role: 'admin' | 'player' | 'super_admin';
 }
-
-    
